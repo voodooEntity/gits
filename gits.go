@@ -54,12 +54,11 @@ var RelationStorageMutex = &sync.RWMutex{}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // init/construct function for storage package
-func Init(persistenceFlag bool) {
+func Init(persistenceCfg types.PersistenceConfig) {
 	// check for persistence.go
-	if true == persistenceFlag {
-		// lets boot the persistence.go worker and check
-		// if we get eny import data
-		importChan := persistence.Init()
+	if true == persistenceCfg.Active {
+		// init the persistence on need
+		importChan := persistence.Init(persistenceCfg)
 		if nil != importChan {
 			handleImport(importChan)
 		}
@@ -830,6 +829,11 @@ func handleImport(importChan chan types.PersistencePayload) {
 			importRelation(elem)
 		case "EntityTypes":
 			importEntityTypes(elem)
+		case "Done":
+			// if we reach this we imported all data so we can close the channel
+			// and return
+			close(importChan)
+			return
 		}
 	}
 }

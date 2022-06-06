@@ -100,12 +100,6 @@ func storeLine(payload types.PersistencePayload) error {
 		}
 	}
 
-	// now we check if we have to rotate logfile
-	if config.RotationEntriesMax == currentPersistenceLineCount {
-		currentPersistenceFilename = int(time.Now().UnixMicro())
-		currentPersistenceLineCount = 0
-	}
-
 	// so we create the logline by json encoding the payload object
 	// and base64 encoding it afterwards for some stability safety
 	// could be more efficient but ok for the start ### refactor
@@ -131,6 +125,13 @@ func storeLine(payload types.PersistencePayload) error {
 	}
 
 	f.Close()
+
+	// now we check if we have to rotate logfile
+	if config.RotationEntriesMax == currentPersistenceLineCount {
+		currentPersistenceFilename = int(time.Now().UnixMicro())
+		currentPersistenceLineCount = 0
+	}
+
 	return nil
 }
 
@@ -311,6 +312,7 @@ func parseStorageIndex() []string {
 
 	// seems fine lets split it to array and return
 	arrPersistenceFileIndex := strings.Split(string(storageIndexBytes), "\n")
+	fmt.Printf("Persistence index content %+v", arrPersistenceFileIndex)
 	return arrPersistenceFileIndex
 }
 
