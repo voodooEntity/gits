@@ -32,11 +32,19 @@ type StorageRelation struct {
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
-// persistance struct
+// persistance payload struct
 type PersistencePayload struct {
 	Type        string
 	Method      string
 	Entity      StorageEntity
 	Relation    StorageRelation
 	EntityTypes map[int]string
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - -
+// persistance config struct
+type PersistenceConfig struct {
+	PersistenceChannelBufferSize int
+	Active                       bool
+	RotationEntriesMax           int
 }
