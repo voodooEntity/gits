@@ -871,6 +871,39 @@ func GetChildRelationsBySourceTypeAndSourceId(Type int, id int, context string) 
 	return mapRet, nil
 }
 
+func GetParentEntitiesByTargetTypeAndTargetIdAndSourceType(targetType int, targetID int, sourceType int, context string) map[int]types.StorageEntity {
+	// initialice the return map
+	var mapRet = make(map[int]types.StorageEntity)
+
+	// set counter for the loop
+	var cnt = 0
+
+	// we lock the RelationStorage and EntityStorage
+	// mutex with.  this allows us to proceed
+	// faster since we just block to copy instead
+	// of blocking for the whole process
+	EntityStorageMutex.RLock()
+	RelationStorageMutex.RLock()
+	for sourceID, _ := range RelationRStorage[targetType][targetID][sourceType] {
+		entity := EntityStorage[sourceType][sourceID]
+		add := true
+		if "" != context && context != entity.Context {
+			add = false
+		}
+		// copy the relation into the return map
+		// and upcount the int
+		if true == add {
+			mapRet[cnt] = deepCopyEntity(EntityStorage[sourceType][sourceID])
+			cnt++
+		}
+
+	}
+	RelationStorageMutex.RUnlock()
+	EntityStorageMutex.RUnlock()
+
+	return mapRet
+}
+
 func GetParentRelationsByTargetTypeAndTargetId(targetType int, targetID int, context string) (map[int]types.StorageRelation, error) {
 	// initialice the return map
 	var mapRet = make(map[int]types.StorageRelation)
