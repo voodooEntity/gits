@@ -21,21 +21,28 @@ var config types.PersistenceConfig
 var importedEntitiesCache = make(map[string]bool)
 var importedRelationsCache = make(map[string]bool)
 
-var currentPersistenceFilename int
-var currentPersistenceLineCount = 0
+var dataTypeIDMap = map[string]int{"Entity": 0, "Relation": 1}
+var dataTypeToStorageDir = map[string]string{"Entity": "entities", "Relation": "relations"}
+
+var currentPersistenceFilename = []int{0, 0}
+var currentPersistenceLineCount = []int{0, 0}
 
 func Init(conf types.PersistenceConfig) chan types.PersistencePayload {
 	// store the given config ### maybe rename/restructure dunno
 	config = conf
 
 	// store current timestamp as current index filename
-	currentPersistenceFilename = int(time.Now().UnixMicro())
+	currTime := int(time.Now().UnixMicro())
+	currentPersistenceFilename[0] = currTime
+	currentPersistenceFilename[1] = currTime
 
 	// first we make sure we have a storage directories and they are writable
-	err := handleDirectory("storage/")
-	if nil != err {
-		archivist.ErrorF("Error handling storage base directory", err.Error())
-		os.Exit(1)
+	for _, dirName := range []string{"storage", "storage/entities", "storage/relations"} {
+		err := handleDirectory(dirName)
+		if nil != err {
+			archivist.ErrorF("Error handling storage directoy - not recoverable %+v", dirName, err.Error())
+			os.Exit(1)
+		}
 	}
 
 	// lets created the persistence channel & flag ### rework if we actually need this
@@ -55,9 +62,6 @@ func startWorker(importChan chan types.PersistencePayload) {
 	// ### config.Logger.Print("> Persistance worker started")
 	// first we import existing data
 	importData(importChan)
-
-	// now we define the current timestamp as current filename
-	currentPersistenceFilename = int(time.Now().UnixMicro())
 
 	// now we handle further persistance
 	var err error
@@ -81,20 +85,19 @@ func startWorker(importChan chan types.PersistencePayload) {
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Handle storage directory
 func storeLine(payload types.PersistencePayload) error {
-	// letss see if we reaced the max count of lines
-	// per file
-	currentPersistenceLineCount++
+	// upcount the current file linecount
+	currentPersistenceLineCount[dataTypeIDMap[payload.Type]]++
 
 	// as soon we got our first entry we gonne add the filename
 	// to our index file
-	if 1 == currentPersistenceLineCount {
-		f, err := os.OpenFile("storage/index", os.O_APPEND|os.O_WRONLY, 0644) // had os.O_CREATE flag before but behaves buggy ### Oo
+	if 1 == currentPersistenceLineCount[dataTypeIDMap[payload.Type]] {
+		f, err := os.OpenFile("storage/"+dataTypeToStorageDir[payload.Type]+"/index", os.O_APPEND|os.O_WRONLY, 0644) // had os.O_CREATE flag before but behaves buggy ### Oo || also im not sure if im a to big fan of the dataTypeblafu map solution. its dynamic but neccesary? maybe just an if?
 		if err != nil {
 			archivist.ErrorF("Could not open storage index to add new logfile %+v", err)
 			panic(err)
 		}
 		defer f.Close()
-		if _, err = f.WriteString(strconv.Itoa(currentPersistenceFilename) + "\n"); err != nil {
+		if _, err = f.WriteString(strconv.Itoa(currentPersistenceFilename[dataTypeIDMap[payload.Type]]) + "\n"); err != nil {
 			archivist.ErrorF("Could not write to storage index %+v", err)
 			panic(err)
 		}
@@ -112,24 +115,24 @@ func storeLine(payload types.PersistencePayload) error {
 
 	// so we open the file , go is nice to us since we can open with o_append and o_create
 	// so we dont need to make sure the file exists already. sometimes magic can be handy.....
-	f, err := os.OpenFile("storage/"+strconv.Itoa(currentPersistenceFilename)+".log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	f, err := os.OpenFile("storage/"+dataTypeToStorageDir[payload.Type]+"/"+strconv.Itoa(currentPersistenceFilename[dataTypeIDMap[payload.Type]])+".log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		archivist.ErrorF("Unable to open current storage file %+v", strconv.Itoa(currentPersistenceFilename)+".log")
+		archivist.ErrorF("Unable to open current storage file %+v", strconv.Itoa(currentPersistenceFilename[dataTypeIDMap[payload.Type]])+".log")
 		return err
 	}
 
 	// now we write the base64(json(payload)) into a line
 	if _, err = f.WriteString(base64StringPayload + "\n"); err != nil {
-		archivist.ErrorF("Unable to write data to current storage file %+v", strconv.Itoa(currentPersistenceFilename)+".log")
+		archivist.ErrorF("Unable to write data to current storage file %+v", strconv.Itoa(currentPersistenceFilename[dataTypeIDMap[payload.Type]])+".log")
 		return err
 	}
 
 	f.Close()
 
 	// now we check if we have to rotate logfile
-	if config.RotationEntriesMax == currentPersistenceLineCount {
-		currentPersistenceFilename = int(time.Now().UnixMicro())
-		currentPersistenceLineCount = 0
+	if config.RotationEntriesMax == currentPersistenceLineCount[dataTypeIDMap[payload.Type]] {
+		currentPersistenceFilename[dataTypeIDMap[payload.Type]] = int(time.Now().UnixMicro())
+		currentPersistenceLineCount[dataTypeIDMap[payload.Type]] = 0
 	}
 
 	return nil
@@ -184,15 +187,17 @@ func importData(importChan chan types.PersistencePayload) {
 
 	// now we gonne parse the storage index
 	// so we know all the storage files to parse
-	arrFileIndex := parseStorageIndex()
-	fileIndexLen := len(arrFileIndex)
-	if 0 < fileIndexLen {
-		for c := fileIndexLen; c > 0; c-- {
-			persistenceFile := arrFileIndex[c-1]
-			// make sure we dont try to read emptystring due to
-			// trailing \n in storage
-			if "" != persistenceFile {
-				handlePersistenceFile(persistenceFile, importChan)
+	for _, storageType := range []string{"entities", "relations"} {
+		arrFileIndex := parseStorageIndex(storageType)
+		fileIndexLen := len(arrFileIndex)
+		if 0 < fileIndexLen {
+			for c := fileIndexLen; c > 0; c-- {
+				persistenceFile := arrFileIndex[c-1]
+				// make sure we dont try to read emptystring due to
+				// trailing \n in storage
+				if "" != persistenceFile {
+					handlePersistenceFile(persistenceFile, importChan, storageType)
+				}
 			}
 		}
 	}
@@ -206,9 +211,9 @@ func importData(importChan chan types.PersistencePayload) {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // handle import of a single persistance logfile
-func handlePersistenceFile(persistenceFile string, importChan chan types.PersistencePayload) {
+func handlePersistenceFile(persistenceFile string, importChan chan types.PersistencePayload, storageType string) {
 	// first we read the file
-	fileBytes, err := readFile("storage/" + persistenceFile + ".log")
+	fileBytes, err := readFile("storage/" + storageType + "/" + persistenceFile + ".log")
 	if err != nil {
 		archivist.ErrorF("Could not reaed persistence file %+v", persistenceFile)
 	}
@@ -291,17 +296,17 @@ func handleImportLine(data string, importChan chan types.PersistencePayload) {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // parse the storage index file for existing persistence files
-func parseStorageIndex() []string {
+func parseStorageIndex(storageType string) []string {
 	// in case this is the first run ever we need to create the storage/index
-	if _, err := os.Stat("storage/index"); errors.Is(err, os.ErrNotExist) {
-		_, err := os.Create("storage/index")
+	if _, err := os.Stat("storage/" + storageType + "/index"); errors.Is(err, os.ErrNotExist) {
+		_, err := os.Create("storage/" + storageType + "/index")
 		if nil != err {
 			archivist.ErrorF("Could not create initial storage index file. Unrecoverable - exiting %+v", err)
 			os.Exit(1)
 		}
 	}
 	// first we read the entityTypes file
-	storageIndexBytes, err := readFile("storage/index")
+	storageIndexBytes, err := readFile("storage/" + storageType + "/index")
 
 	// if it is an error
 	if nil != err {
