@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits/src/types"
 	"io/ioutil"
 	"os"
@@ -34,7 +34,7 @@ func Init(conf types.PersistenceConfig) chan types.PersistencePayload {
 	// first we make sure we have a storage directories and they are writable
 	err := handleDirectory("storage/")
 	if nil != err {
-		fmt.Printf("Error handling storage base directory", err.Error())
+		archivist.ErrorF("Error handling storage base directory", err.Error())
 		os.Exit(1)
 	}
 
@@ -72,7 +72,7 @@ func startWorker(importChan chan types.PersistencePayload) {
 			err = storeLine(elem)
 		}
 		if nil != err {
-			fmt.Printf("Could not handle given payload error %+v", elem, err)
+			archivist.ErrorF("Could not handle given payload error %+v", elem, err)
 			os.Exit(1)
 		}
 	}
@@ -88,14 +88,14 @@ func storeLine(payload types.PersistencePayload) error {
 	// as soon we got our first entry we gonne add the filename
 	// to our index file
 	if 1 == currentPersistenceLineCount {
-		f, err := os.OpenFile("storage/index", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+		f, err := os.OpenFile("storage/index", os.O_APPEND|os.O_WRONLY, 0644) // had os.O_CREATE flag before but behaves buggy ### Oo
 		if err != nil {
-			fmt.Println("Could not open storage index to add new logfile")
+			archivist.ErrorF("Could not open storage index to add new logfile %+v", err)
 			panic(err)
 		}
 		defer f.Close()
 		if _, err = f.WriteString(strconv.Itoa(currentPersistenceFilename) + "\n"); err != nil {
-			fmt.Println("Could not write to storage index")
+			archivist.ErrorF("Could not write to storage index %+v", err)
 			panic(err)
 		}
 	}
@@ -105,7 +105,7 @@ func storeLine(payload types.PersistencePayload) error {
 	// could be more efficient but ok for the start ### refactor
 	bytesPayloadJson, err := json.Marshal(payload)
 	if err != nil {
-		fmt.Println(err)
+		archivist.Error("Could not json decode json payload from persstence file ", err)
 		return err
 	}
 	base64StringPayload := base64.StdEncoding.EncodeToString(bytesPayloadJson)
@@ -114,13 +114,13 @@ func storeLine(payload types.PersistencePayload) error {
 	// so we dont need to make sure the file exists already. sometimes magic can be handy.....
 	f, err := os.OpenFile("storage/"+strconv.Itoa(currentPersistenceFilename)+".log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		fmt.Printf("Unable to open current storage file %+v", strconv.Itoa(currentPersistenceFilename)+".log")
+		archivist.ErrorF("Unable to open current storage file %+v", strconv.Itoa(currentPersistenceFilename)+".log")
 		return err
 	}
 
 	// now we write the base64(json(payload)) into a line
 	if _, err = f.WriteString(base64StringPayload + "\n"); err != nil {
-		fmt.Printf("Unable to write data to current storage file %+v", strconv.Itoa(currentPersistenceFilename)+".log")
+		archivist.ErrorF("Unable to write data to current storage file %+v", strconv.Itoa(currentPersistenceFilename)+".log")
 		return err
 	}
 
@@ -210,14 +210,13 @@ func handlePersistenceFile(persistenceFile string, importChan chan types.Persist
 	// first we read the file
 	fileBytes, err := readFile("storage/" + persistenceFile + ".log")
 	if err != nil {
-		fmt.Printf("Could not reaed persistence file %+v", persistenceFile)
+		archivist.ErrorF("Could not reaed persistence file %+v", persistenceFile)
 	}
 
 	// ok seems fine lets put it back to a string
 	// and split it linewise
 	fileString := string(fileBytes)
 	arrFile := strings.Split(fileString, "\n")
-
 	// now we iterate the file backwards since
 	lineCount := len(arrFile)
 	for c := lineCount; c > 0; c-- {
@@ -241,7 +240,7 @@ func handleImportLine(data string, importChan chan types.PersistencePayload) {
 	// think about a better way ### refactor
 	rawDecodedText, err := base64.StdEncoding.DecodeString(data)
 	if nil != err {
-		fmt.Printf("Cannot decode base64 line from persistence file", data)
+		archivist.Error("Cannot decode base64 line from persistence file", data)
 		return
 	}
 
@@ -251,7 +250,7 @@ func handleImportLine(data string, importChan chan types.PersistencePayload) {
 	var payload types.PersistencePayload
 	err = json.Unmarshal(rawDecodedText, &payload)
 	if nil != err {
-		fmt.Printf("Cannot decode json line from persistence file", rawDecodedText)
+		archivist.Error("Cannot decode json line from persistence file", rawDecodedText)
 		return
 	}
 
@@ -261,8 +260,8 @@ func handleImportLine(data string, importChan chan types.PersistencePayload) {
 	switch payload.Type {
 	case "Entity":
 		// first we check if that dataset already has been handeled
-		typeStr := string(payload.Entity.Type)
-		idStr := string(payload.Entity.ID)
+		typeStr := strconv.Itoa(payload.Entity.Type)
+		idStr := strconv.Itoa(payload.Entity.ID)
 		key := typeStr + "-" + idStr
 		if _, ok := importedEntitiesCache[key]; !ok {
 			importedEntitiesCache[key] = true
@@ -270,10 +269,10 @@ func handleImportLine(data string, importChan chan types.PersistencePayload) {
 		}
 	case "Relation":
 		// first we check if that dataset already has been handeled
-		srcTypeStr := string(payload.Relation.SourceType)
-		srcIdStr := string(payload.Relation.SourceID)
-		trgtTypeStr := string(payload.Relation.TargetType)
-		trgtIdStr := string(payload.Relation.TargetID)
+		srcTypeStr := strconv.Itoa(payload.Relation.SourceType)
+		srcIdStr := strconv.Itoa(payload.Relation.SourceID)
+		trgtTypeStr := strconv.Itoa(payload.Relation.TargetType)
+		trgtIdStr := strconv.Itoa(payload.Relation.TargetID)
 		key := srcTypeStr + "-" + srcIdStr + "-" + trgtTypeStr + "-" + trgtIdStr
 		if _, ok := importedEntitiesCache[key]; !ok {
 			importedEntitiesCache[key] = true
@@ -297,7 +296,7 @@ func parseStorageIndex() []string {
 	if _, err := os.Stat("storage/index"); errors.Is(err, os.ErrNotExist) {
 		_, err := os.Create("storage/index")
 		if nil != err {
-			fmt.Printf("Could not create initial storage index file. Unrecoverable - exiting %+v", err)
+			archivist.ErrorF("Could not create initial storage index file. Unrecoverable - exiting %+v", err)
 			os.Exit(1)
 		}
 	}
@@ -306,13 +305,13 @@ func parseStorageIndex() []string {
 
 	// if it is an error
 	if nil != err {
-		fmt.Printf("Could not read  storage index file. Unrecoverable - exiting %+v", err)
+		archivist.ErrorF("Could not read  storage index file. Unrecoverable - exiting %+v", err)
 		os.Exit(1)
 	}
 
 	// seems fine lets split it to array and return
 	arrPersistenceFileIndex := strings.Split(string(storageIndexBytes), "\n")
-	fmt.Printf("Persistence index content %+v", arrPersistenceFileIndex)
+	archivist.DebugF("Persistence index content %+v", arrPersistenceFileIndex)
 	return arrPersistenceFileIndex
 }
 
@@ -323,7 +322,7 @@ func importEntityTypes(importChan chan types.PersistencePayload) {
 	if _, err := os.Stat("storage/entityTypes"); errors.Is(err, os.ErrNotExist) {
 		err := writeFile([]byte("{}"), "storage/entityTypes")
 		if nil != err {
-			fmt.Printf("Could not create initial entity types file. Unrecoverable - exiting %+v", err)
+			archivist.ErrorF("Could not create initial entity types file. Unrecoverable - exiting %+v", err)
 			os.Exit(1)
 		}
 	}
@@ -332,7 +331,7 @@ func importEntityTypes(importChan chan types.PersistencePayload) {
 
 	// if it is an error
 	if nil != err {
-		fmt.Printf("Could not read entityTypes file - unrecoverable")
+		archivist.ErrorF("Could not read entityTypes file - unrecoverable")
 		os.Exit(1)
 	}
 
@@ -340,7 +339,7 @@ func importEntityTypes(importChan chan types.PersistencePayload) {
 	var entityTypes map[int]string
 	err = json.Unmarshal(entityTypesJsonBytes, &entityTypes)
 	if nil != err {
-		fmt.Printf("Could json parse entityTypes file data - unrecoverable")
+		archivist.ErrorF("Could json parse entityTypes file data - unrecoverable")
 		os.Exit(1)
 	}
 
@@ -358,7 +357,7 @@ func readFile(filePath string) ([]byte, error) {
 	data, err := ioutil.ReadFile(filePath)
 	if nil != err {
 		// ### config.Logger.Print("> Error reading persistant storage file. Check your permissions")
-		fmt.Printf("Could not read given file %+v", filePath)
+		archivist.ErrorF("Could not read given file %+v", filePath)
 		os.Exit(1)
 	}
 	return data, nil

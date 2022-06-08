@@ -200,6 +200,101 @@ func CreateEntity(entity types.StorageEntity) (int, error) {
 	return newID, nil
 }
 
+func CreateEntityUniqueValue(entity types.StorageEntity) (int, error) {
+	//types.PrintMemUsage()
+	// first we lock the entity Type mutex
+	// to make sure while we check for the
+	// existence it doesnt get deletet, this
+	// may sound like a very rare upcoming case,
+	//but better be safe than sorry
+	EntityTypeMutex.RLock()
+
+	// now we will cache the stype string due to the
+	// special hack implementation of createEntityUniqueValue
+	// for what we created the unsafe retrieval version  getEntitiesByTypeAndValueUnsafe()
+	// that expects a string instread of the usualy on create neccesary id.
+	var stype string
+	if val, ok := EntityTypes[entity.Type]; !ok {
+		// the Type doest exist, lets unlock
+		// the Type mutex and return -1 for fail0r
+		EntityTypeMutex.RUnlock()
+		return -1, errors.New("CreateEntityUniqueValue.Entity Type not existing")
+	} else {
+		stype = val
+	}
+	// the Type seems to exist, now lets lock the
+	// storage mutex before Unlocking the Entity
+	// Type mutex to prevent the Type beeing
+	// deleted before we start locking (small
+	// timing still possible )
+	EntityTypeMutex.RUnlock()
+
+	// since this is the UniqueValue variant
+	// we have to lock and make sure the type:value combination
+	// doesnt exist. thatfor we call getEntitiesByTypeAndValueUnsafe()
+	// which doesnt have any locking implemented and thatfor will be able
+	// to see if we can retrieve any entity fitting
+	EntityStorageMutex.Lock()
+	entities, err := GetEntitiesByTypeAndValueUnsafe(stype, entity.Value, "match", entity.Context)
+	if nil != err {
+		EntityStorageMutex.Unlock()
+		return -1, err
+	}
+	// ### think about update logic since collection properties might change
+	if 0 < len(entities) {
+		EntityStorageMutex.Unlock()
+		//return -1,errors.New("CreateEntityUniqueValue.Entity Entity with given value already exists")
+		return entities[0].ID, nil
+	}
+	// upcount our ID Max and copy it
+	// into another variable so we can be sure
+	// between unlock of the ressource and return
+	// it doesnt get upcounted
+	// and set the IDMaxMutex on write Lock
+	// lets upcount the entity id max fitting to
+	//         [Type]
+	EntityIDMax[entity.Type]++
+	var newID = EntityIDMax[entity.Type]
+
+	//EntityIDMaxMasterMutex.Lock()
+	// and tell the entity its own id
+	entity.ID = newID
+
+	// and set the version to 1
+	entity.Version = 1
+
+	// - - - - - - - - - - - - - - - - -
+	// persistance handling
+	if true == persistence.PersistenceFlag {
+		persistence.PersistenceChan <- types.PersistencePayload{
+			Type:   "Entity",
+			Method: "Create",
+			Entity: entity,
+		}
+	}
+	// - - - - - - - - - - - - - - - - -
+
+	// now we store the entity element
+	// in the EntityStorage
+	EntityStorage[entity.Type][newID] = entity
+
+	//printMutexActions("CreateEntity.EntityStorageMutex.Unlock");
+	EntityStorageMutex.Unlock()
+
+	// create the mutex for our ressource on
+	// relation. we have to create the sub maps too
+	// golang things....
+	RelationStorageMutex.Lock()
+	RelationStorage[entity.Type][newID] = make(map[int]map[int]types.StorageRelation)
+	RelationRStorage[entity.Type][newID] = make(map[int]map[int]bool)
+	RelationStorageMutex.Unlock()
+
+	// since we now stored the entity and created all
+	// needed ressources we can unlock
+	// the storage ressource and return the ID (or err)
+	return newID, nil
+}
+
 func GetEntityByPath(Type int, id int, context string) (types.StorageEntity, error) {
 	// lets check if entity witrh the given path exists
 	EntityStorageMutex.Lock()
@@ -411,6 +506,83 @@ func GetEntitiesByTypeAndValue(Type string, value string, mode string, context s
 
 	// unlock storage again and return
 	EntityStorageMutex.RUnlock()
+	return entities, nil
+}
+
+func GetEntitiesByTypeAndValueUnsafe(Type string, value string, mode string, context string) (map[int]types.StorageEntity, error) {
+	// lets prepare the return map, counter and regex r
+	entities := make(map[int]types.StorageEntity)
+	i := 0
+	var r *regexp.Regexp
+	var err error = nil
+
+	// retrieve the fitting id
+	entityTypeID, _ := GetTypeIdByString(Type)
+
+	// if we got mode regex we prepare the regex
+	// by precompiling it to have faster lookups
+	if "regex" == mode {
+		r, err = regexp.Compile(value)
+
+		// check if regex could be compiled successfull,
+		// else return error
+		if nil != err {
+			return map[int]types.StorageEntity{}, err
+		}
+	}
+
+	// than we iterate through all entity storage to find a fitting value
+	if 0 < len(EntityStorage) {
+		if 0 < len(EntityStorage[entityTypeID]) {
+			for _, entity := range EntityStorage[entityTypeID] {
+				// preset add with true
+				add := true
+
+				// check if context is set , if yes and it doesnt
+				// fit we dont add
+				if context != "" && entity.Context != context {
+					add = false
+				}
+
+				// finally if everything is fine we add the dataset
+				if add {
+					switch mode {
+					case "match":
+						// exact match
+						if entity.Value == value {
+							entities[i] = deepCopyEntity(entity)
+							i++
+						}
+					case "prefix":
+						// starts with
+						if strings.HasPrefix(entity.Value, value) {
+							entities[i] = deepCopyEntity(entity)
+							i++
+						}
+					case "suffix":
+						// ends with
+						if strings.HasSuffix(entity.Value, value) {
+							entities[i] = deepCopyEntity(entity)
+							i++
+						}
+					case "contain":
+						// contains
+						if strings.Contains(entity.Value, value) {
+							entities[i] = deepCopyEntity(entity)
+							i++
+						}
+					case "regex":
+						// matches regex
+						if r.MatchString(entity.Value) {
+							entities[i] = deepCopyEntity(entity)
+							i++
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return entities, nil
 }
 
@@ -751,6 +923,21 @@ func GetEntityTypes() []string {
 	return types
 }
 
+func GetEntityRTypes() map[string]int {
+	// prepare the return array
+	types := make(map[string]int)
+
+	// now we lock the storage
+	EntityTypeMutex.RLock()
+	for Type, id := range EntityRTypes {
+		types[Type] = id
+	}
+
+	// unlock the mutex and return
+	EntityTypeMutex.RUnlock()
+	return types
+}
+
 func TypeExists(strType string) bool {
 	EntityTypeMutex.RLock()
 	// lets check if this Type exists
@@ -821,12 +1008,16 @@ func GetTypeStringById(intType int) (*string, error) {
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 func handleImport(importChan chan types.PersistencePayload) {
+	var importEntities = 0
+	var importRelations = 0
 	for elem := range importChan {
 		switch elem.Type {
 		case "Entity":
 			importEntity(elem)
+			importEntities++
 		case "Relation":
 			importRelation(elem)
+			importRelations++
 		case "EntityTypes":
 			importEntityTypes(elem)
 		case "Done":
