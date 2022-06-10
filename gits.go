@@ -200,7 +200,8 @@ func CreateEntity(entity types.StorageEntity) (int, error) {
 	return newID, nil
 }
 
-func CreateEntityUniqueValue(entity types.StorageEntity) (int, error) {
+// bool return = has a new dataset been created
+func CreateEntityUniqueValue(entity types.StorageEntity) (int, bool, error) {
 	//types.PrintMemUsage()
 	// first we lock the entity Type mutex
 	// to make sure while we check for the
@@ -218,7 +219,7 @@ func CreateEntityUniqueValue(entity types.StorageEntity) (int, error) {
 		// the Type doest exist, lets unlock
 		// the Type mutex and return -1 for fail0r
 		EntityTypeMutex.RUnlock()
-		return -1, errors.New("CreateEntityUniqueValue.Entity Type not existing")
+		return -1, false, errors.New("CreateEntityUniqueValue.Entity Type not existing")
 	} else {
 		stype = val
 	}
@@ -238,13 +239,13 @@ func CreateEntityUniqueValue(entity types.StorageEntity) (int, error) {
 	entities, err := GetEntitiesByTypeAndValueUnsafe(stype, entity.Value, "match", entity.Context)
 	if nil != err {
 		EntityStorageMutex.Unlock()
-		return -1, err
+		return -1, false, err
 	}
 	// ### think about update logic since collection properties might change
 	if 0 < len(entities) {
 		EntityStorageMutex.Unlock()
 		//return -1,errors.New("CreateEntityUniqueValue.Entity Entity with given value already exists")
-		return entities[0].ID, nil
+		return entities[0].ID, false, nil
 	}
 	// upcount our ID Max and copy it
 	// into another variable so we can be sure
@@ -292,7 +293,7 @@ func CreateEntityUniqueValue(entity types.StorageEntity) (int, error) {
 	// since we now stored the entity and created all
 	// needed ressources we can unlock
 	// the storage ressource and return the ID (or err)
-	return newID, nil
+	return newID, true, nil
 }
 
 func GetEntityByPath(Type int, id int, context string) (types.StorageEntity, error) {
