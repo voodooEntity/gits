@@ -1,9 +1,11 @@
 package persistence
 
 import (
-	"encoding/base64"
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits/src/types"
 	"io/ioutil"
@@ -103,16 +105,12 @@ func storeLine(payload types.PersistencePayload) error {
 		}
 	}
 
-	// so we create the logline by json encoding the payload object
-	// and base64 encoding it afterwards for some stability safety
-	// could be more efficient but ok for the start ### refactor
-	bytesPayloadJson, err := json.Marshal(payload)
+	// so we create the logline by gob encoding the payload object
+	gobString, err := EncodeGobToString(payload)
 	if err != nil {
-		archivist.Error("Could not json decode json payload from persstence file ", err)
+		archivist.Error("Could not encode gob for persistence file ")
 		return err
 	}
-	base64StringPayload := base64.StdEncoding.EncodeToString(bytesPayloadJson)
-
 	// so we open the file , go is nice to us since we can open with o_append and o_create
 	// so we dont need to make sure the file exists already. sometimes magic can be handy.....
 	f, err := os.OpenFile("storage/"+dataTypeToStorageDir[payload.Type]+"/"+strconv.Itoa(currentPersistenceFilename[dataTypeIDMap[payload.Type]])+".log", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
@@ -121,8 +119,9 @@ func storeLine(payload types.PersistencePayload) error {
 		return err
 	}
 
-	// now we write the base64(json(payload)) into a line
-	if _, err = f.WriteString(base64StringPayload + "\n"); err != nil {
+	// now we create the lodata itself
+	logEntry := gobString + fmt.Sprintf("%032d", len(gobString))
+	if _, err = f.WriteString(logEntry); err != nil {
 		archivist.ErrorF("Unable to write data to current storage file %+v", strconv.Itoa(currentPersistenceFilename[dataTypeIDMap[payload.Type]])+".log")
 		return err
 	}
@@ -220,14 +219,19 @@ func handlePersistenceFile(persistenceFile string, importChan chan types.Persist
 
 	// ok seems fine lets put it back to a string
 	// and split it linewise
-	fileString := string(fileBytes)
-	arrFile := strings.Split(fileString, "\n")
-	// now we iterate the file backwards since
-	lineCount := len(arrFile)
-	for c := lineCount; c > 0; c-- {
-		handleImportLine(arrFile[c-1], importChan)
-	}
+	fileLen := len(fileBytes)
+	end := int64(fileLen)
+	start := end - 32
 
+	for start >= 0 {
+		// extract the index
+		blockNum, _ := strconv.ParseInt(string(fileBytes[start:end]), 10, 64)
+		start -= blockNum
+		end -= 32
+		handleImportLine(string(fileBytes[start:end]), importChan)
+		start -= 32
+		end -= blockNum
+	}
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -241,21 +245,12 @@ func handleImportLine(data string, importChan chan types.PersistencePayload) {
 	}
 
 	// now we decode a persistance payload per line.
-	// first we base64 decode (so \n cant fuck us up - maybe
-	// think about a better way ### refactor
-	rawDecodedText, err := base64.StdEncoding.DecodeString(data)
-	if nil != err {
-		archivist.Error("Cannot decode base64 line from persistence file", data)
-		return
-	}
-
-	// now we decode the json. i thought about using gob format but
-	// have to run several tests if we can safely store multiple gob inside
-	// one file. in theory it should work but ye.... ### refactor
+	// so we decode gob from string with a little hack
+	// we discovered
 	var payload types.PersistencePayload
-	err = json.Unmarshal(rawDecodedText, &payload)
+	err := DecodeGobFromString(data, payload)
 	if nil != err {
-		archivist.Error("Cannot decode json line from persistence file", rawDecodedText)
+		archivist.Error("Cannot decode gob line from persistence file", data)
 		return
 	}
 
@@ -366,4 +361,25 @@ func readFile(filePath string) ([]byte, error) {
 		os.Exit(1)
 	}
 	return data, nil
+}
+
+func EncodeGobToString(object interface{}) (string, error) {
+	buf := new(bytes.Buffer)
+	encoder := gob.NewEncoder(buf)
+	err := encoder.Encode(object)
+	if nil != err {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func DecodeGobFromString(gobData string, object interface{}) error {
+	fakeReader := strings.NewReader(gobData)
+	decoder := gob.NewDecoder(fakeReader)
+	err := decoder.Decode(object)
+	if nil != err {
+		fmt.Println(err)
+		return err
+	}
+	return nil
 }
