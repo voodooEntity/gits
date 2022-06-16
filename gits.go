@@ -1037,6 +1037,34 @@ func GetTypeStringById(intType int) (*string, error) {
 	return nil, errors.New("Entity Type string does not exist")
 }
 
+func GetAmountPersistencePayloadsPending() int {
+	return len(persistence.PersistenceChan)
+}
+
+func GetEntityAmount() int {
+	amount := 0
+	EntityStorageMutex.RLock()
+	for key, _ := range EntityStorage {
+		amount += len(EntityStorage[key])
+	}
+	EntityStorageMutex.RUnlock()
+	return amount
+}
+
+func GetEntityAmountByType(intType int) (int, error) {
+	EntityStorageMutex.RLock()
+	// lets check if this Type exists
+	if _, ok := EntityStorage[intType]; ok {
+		// it does lets return
+		amount := len(EntityStorage[intType])
+		EntityStorageMutex.RUnlock()
+		return amount, nil
+	}
+
+	EntityStorageMutex.RUnlock()
+	return -1, errors.New("Entity Type does not exist")
+}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // + + + + + + + + + +  PRIVATE  + + + + + + + + + + +
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
