@@ -1164,6 +1164,13 @@ func importRelation(payload types.PersistencePayload) {
 	// now we lock the relation mutex
 	RelationStorageMutex.Lock()
 
+	// we check the case that the "from" history doesnt exist. in this case the relation makes no sense
+	if _, ok := RelationStorage[payload.Relation.SourceType][payload.Relation.SourceID]; !ok {
+		// unlock the mutex and stop processing
+		RelationStorageMutex.Unlock()
+		return
+	}
+
 	// lets check if their exists a map for our
 	// source entity to the target Type if not
 	// create it.... golang things...
