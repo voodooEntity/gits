@@ -288,7 +288,11 @@ func handleImportLine(data string, importChan chan types.PersistencePayload) {
 	// now we make sure if its a to-handle dataset if the method needs us to
 	// to take further action
 	if true == send {
+		// is it an action that actually needs to be kept?
 		if "Create" == payload.Method || "Update" == payload.Method {
+			// store the line in a new persistance file
+			storeLine(payload)
+			// and send it to importer gits
 			importChan <- payload
 		}
 	}
@@ -297,21 +301,27 @@ func handleImportLine(data string, importChan chan types.PersistencePayload) {
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // parse the storage index file for existing persistence files
 func parseStorageIndex(storageType string) []string {
+	path := "storage/" + storageType + "/index"
 	// in case this is the first run ever we need to create the storage/index
-	if _, err := os.Stat("storage/" + storageType + "/index"); errors.Is(err, os.ErrNotExist) {
-		_, err := os.Create("storage/" + storageType + "/index")
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		_, err := os.Create(path)
 		if nil != err {
 			archivist.ErrorF("Could not create initial storage index file. Unrecoverable - exiting %+v", err)
 			os.Exit(1)
 		}
 	}
 	// first we read the entityTypes file
-	storageIndexBytes, err := readFile("storage/" + storageType + "/index")
+	storageIndexBytes, err := readFile(path)
 
 	// if it is an error
 	if nil != err {
-		archivist.ErrorF("Could not read  storage index file. Unrecoverable - exiting %+v", err)
+		archivist.ErrorF("Could not read storage index file. Unrecoverable - exiting %+v", err)
 		os.Exit(1)
+	}
+
+	// now we truncate the file for new files pushing
+	if err = os.Truncate(path, 0); err != nil {
+		archivist.ErrorF("Failed to truncate index file - persistance inconsistent: %v", err)
 	}
 
 	// seems fine lets split it to array and return
