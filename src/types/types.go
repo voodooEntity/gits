@@ -48,3 +48,46 @@ type PersistenceConfig struct {
 	Active                       bool
 	RotationEntriesMax           int
 }
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - -
+/**
+Methods:
+-> SELECT
+-> REDUCE
+-> UPDATE
+-> DELETE
+-> COUNT
+
+Type:
+-> Entity
+-> Relation
+
+Filter:
+-> Value
+-> Context
+-> Property
+-> ID
+-> Type
+
+Compare Operators:
+-> equals
+-> prefix
+-> suffix
+-> substring
+-> >=
+-> <=
+-> ==
+
+AFTERPROCESSING:
+-> ORDER BY % ASC/DESC
+
+SPECIAL:
+-> LIMIT
+-> TRAVERSE
+-> RTRAVERSE
+
+*/
+type Query struct {
+	Method int
+	Filter map[string]map[string]string
+}
