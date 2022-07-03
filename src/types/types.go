@@ -52,7 +52,7 @@ type PersistenceConfig struct {
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 /**
 Methods:
--> SELECT
+-> READ
 -> REDUCE
 -> UPDATE
 -> DELETE
@@ -89,5 +89,10 @@ SPECIAL:
 */
 type Query struct {
 	Method int
-	Filter map[string]map[string]string
+	Filter map[int]FilterGroup
+}
+
+type FilterGroup struct {
+	Filter map[int]
+	Query map[int]Query
 }
