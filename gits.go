@@ -1170,6 +1170,12 @@ func importRelation(payload types.PersistencePayload) {
 		RelationStorageMutex.Unlock()
 		return
 	}
+	// same hotfix check see babove
+	if _, ok := RelationRStorage[payload.Relation.TargetType][payload.Relation.TargetID]; !ok {
+		// unlock the mutex and stop processing
+		RelationStorageMutex.Unlock()
+		return
+	}
 
 	// lets check if their exists a map for our
 	// source entity to the target Type if not
