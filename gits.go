@@ -303,8 +303,9 @@ func GetEntityByPath(Type int, id int, context string) (types.StorageEntity, err
 		// if yes we return the entity
 		// and nil for error
 		if "" == context || entity.Context == context {
+			ret := deepCopyEntity(entity)
 			EntityStorageMutex.Unlock()
-			return deepCopyEntity(entity), nil
+			return ret, nil
 		}
 	}
 
