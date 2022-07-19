@@ -50,6 +50,44 @@ type PersistenceConfig struct {
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
+type Query struct {
+	Method int
+	Match  [][][3]string
+	Map    []Query
+	Mode   [][]string
+}
+
+type Result struct {
+	Entities  map[int]StorageEntity
+	Relations map[int]StorageRelation
+}
+
+var qry = Query{
+	Method: 1,
+	Match: [][][3]string{
+		{
+			{"type", "==", "testtype"},
+			{"properties.Something", "!=", "idontwantthis"},
+		},
+	},
+	Map: []Query{
+		{
+			Method: 2,
+			Match: [][][3]string{
+				{
+					{"type", "==", "testchild"},
+					{"context", "==", "findme"},
+				},
+			},
+		},
+	},
+	Mode: [][]string{
+		{"order", "id", "desc"},
+		{"limit", "10"},
+	},
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - -
 /**
 Methods:
 -> READ
@@ -87,12 +125,3 @@ SPECIAL:
 -> RTRAVERSE
 
 */
-type Query struct {
-	Method int
-	Filter map[int]FilterGroup
-}
-
-type FilterGroup struct {
-	Filter map[int]
-	Query map[int]Query
-}
