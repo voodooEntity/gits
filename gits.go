@@ -1778,15 +1778,15 @@ func GetEntitiesByQueryFilter(
 					// first we check if there is an ID filter
 					// ### could have a special case for == on
 					// id since this can be resolved very fast
-					if !matchGroup(idFilter[conditionGroupKey], conditionGroup, strconv.Itoa(entityID)) {
+					if 0 < len(idFilter[conditionGroupKey]) && !matchGroup(idFilter[conditionGroupKey], conditionGroup, strconv.Itoa(entityID)) {
 						continue
 					}
 					// now we value
-					if !matchGroup(valueFilter[conditionGroupKey], conditionGroup, entity.Value) {
+					if 0 < len(valueFilter[conditionGroupKey]) && !matchGroup(valueFilter[conditionGroupKey], conditionGroup, entity.Value) {
 						continue
 					}
 					// than context
-					if !matchGroup(contextFilter[conditionGroupKey], conditionGroup, entity.Context) {
+					if 0 < len(contextFilter[conditionGroupKey]) && !matchGroup(contextFilter[conditionGroupKey], conditionGroup, entity.Context) {
 						continue
 					}
 					// and now the properties
@@ -1974,6 +1974,7 @@ func getRelationContextByAddressAndDirection(sourceType int, sourceID int, targe
 	}
 }
 func getRelationPropertiesByAddressAndDirection(sourceType int, sourceID int, targetType int, targetID int, direction int) map[string]string {
+	// relations need to be copied the current way can lead to thread collision ###todo
 	if 1 == direction {
 		return RelationStorage[sourceType][sourceID][targetType][targetID].Properties
 	} else {

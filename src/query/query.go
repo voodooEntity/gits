@@ -87,12 +87,16 @@ func (self *Query) Delete(etype ...string) *Query {
 }
 
 func (self *Query) Match(alpha string, operator string, beta string) *Query {
+	if 0 == len(self.Conditions) {
+		self.Conditions = make([][][3]string, 1)
+	}
 	self.Conditions[self.currConditionGroup] = append(self.Conditions[self.currConditionGroup], [3]string{alpha, operator, beta})
 	return self
 }
 
-func (self *Query) OrWhere(alpha string, operator string, beta string) *Query {
+func (self *Query) OrMatch(alpha string, operator string, beta string) *Query {
 	self.currConditionGroup++
+	self.Conditions = append(self.Conditions, make([][3]string, 1))
 	self.Match(alpha, operator, beta)
 	return self
 }
@@ -130,9 +134,18 @@ func Execute(query *Query) result.Result {
 	// we can work with a read lock, everything else will need a
 	// full lock
 	if METHOD_READ == query.Method {
+		gits.EntityTypeMutex.RLock()
 		gits.EntityStorageMutex.RLock()
 	} else {
 		gits.EntityStorageMutex.Lock()
+	}
+
+	// do we have any potential joins? if yes we need to read lock the relation storage
+	// ### maybe add lock for link() method later
+	unlockRelationStorage := false
+	if 0 < len(query.Map) {
+		gits.RelationStorageMutex.RLock()
+		unlockRelationStorage = true
 	}
 
 	// parse the conditions into our 2 neccesary groups
@@ -159,12 +172,17 @@ func Execute(query *Query) result.Result {
 	if 0 < len(query.Map) {
 		for key, entityAddress := range resultAddresses {
 			children, parents, amount := recursiveExecute(query.Map, entityAddress)
+			add := false
 			if 0 < len(children) {
 				resultData[key].ChildRelations = append(resultData[key].ChildRelations, children...)
-				ret.Data = append(ret.Data, resultData[key])
+				add = true
 			}
 			if 0 < len(parents) {
-				resultData[key].ParentRelations = append(resultData[key].ParentRelations, children...)
+				resultData[key].ParentRelations = append(resultData[key].ParentRelations, parents...)
+				add = true
+			}
+			// do we have any data to add?
+			if true == add {
 				ret.Data = append(ret.Data, resultData[key])
 			}
 			ret.Amount = amount
@@ -178,6 +196,11 @@ func Execute(query *Query) result.Result {
 		// now we need to dispatch based on method what we gonne do
 		switch query.Method {
 		case METHOD_READ:
+			gits.EntityTypeMutex.RUnlock()
+			gits.EntityStorageMutex.RUnlock()
+			if unlockRelationStorage {
+				gits.RelationStorageMutex.RUnlock()
+			}
 			return ret
 		case METHOD_CREATE:
 		case METHOD_UPDATE:
@@ -254,6 +277,16 @@ func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
 	baseMatchList := [3][][]int{{}, {}, {}}
 	propertyMatchList := []map[string][]int{}
 	for conditionGroupKey, conditionGroup := range query.Conditions {
+		// sub allocate arrays for each condition group to make sure we dont have missing entries
+		// slices u know...
+		// first for the base filters
+		for _, filterGroup := range [3]int{FILTER_ID, FILTER_VALUE, FILTER_CONTEXT} {
+			baseMatchList[filterGroup] = append(baseMatchList[filterGroup], []int{})
+			baseMatchList[filterGroup][conditionGroupKey] = []int{}
+		}
+		// than for the property filter
+		propertyMatchList = append(propertyMatchList, map[string][]int{})
+		// than we actually parse the conditions
 		for conditionKey, conditionValue := range conditionGroup {
 			switch conditionValue[0] {
 			case "ID":
