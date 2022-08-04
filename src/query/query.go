@@ -34,7 +34,7 @@ type Query struct {
 	Mode               [][]string
 	Values             map[string]string
 	currConditionGroup int
-	Direction          int
+	Direction          int by
 }
 
 func New() *Query {
