@@ -4,7 +4,7 @@ package gits
 import (
 	"errors"
 	"github.com/voodooEntity/gits/src/persistence"
-	"github.com/voodooEntity/gits/src/result"
+	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
 	"regexp"
 	"strconv"
@@ -1744,7 +1744,7 @@ func GetEntitiesByQueryFilter(
 	propertyList []map[string][]int,
 	returnDataFlag bool,
 ) (
-	[]result.ResultEntity,
+	[]transport.TransportEntity,
 	[][2]int,
 	int,
 ) {
@@ -1759,11 +1759,11 @@ func GetEntitiesByQueryFilter(
 
 	// do we have any types in pool left?
 	if 0 == len(typeList) {
-		return []result.ResultEntity{}, nil, 0
+		return []transport.TransportEntity{}, nil, 0
 	}
 
 	// prepare results
-	var resultEntities []result.ResultEntity
+	var resultEntities []transport.TransportEntity
 	var resultAddresses [][2]int
 
 	// if we get here we got some valid types in our typelist,
@@ -1822,15 +1822,15 @@ func GetEntitiesByQueryFilter(
 						props[key] = value
 					}
 					// than we add the ResultEntity itself
-					resultEntities = append(resultEntities, result.ResultEntity{
+					resultEntities = append(resultEntities, transport.TransportEntity{
 						Type:            EntityTypes[entity.Type],
 						ID:              entity.ID,
 						Value:           entity.Value,
 						Context:         entity.Context,
 						Version:         entity.Version,
 						Properties:      props,
-						ParentRelations: []result.ResultRelation{},
-						ChildRelations:  []result.ResultRelation{},
+						ParentRelations: []transport.TransportRelation{},
+						ChildRelations:  []transport.TransportRelation{},
 					})
 				}
 				resultAddresses = append(resultAddresses, [2]int{entity.Type, entityID})
@@ -1851,7 +1851,7 @@ func GetEntitiesByQueryFilterAndSourceAddress(
 	direction int,
 	returnDataFlag bool,
 ) (
-	[]result.ResultRelation,
+	[]transport.TransportRelation,
 	[][2]int,
 	int,
 ) {
@@ -1870,7 +1870,7 @@ func GetEntitiesByQueryFilterAndSourceAddress(
 	}
 
 	// prepare results
-	var resultEntities []result.ResultRelation
+	var resultEntities []transport.TransportRelation
 	var resultAddresses [][2]int
 
 	// based on the possible relations
@@ -1940,18 +1940,18 @@ func GetEntitiesByQueryFilterAndSourceAddress(
 						props[key] = value
 					}
 					// than we add the ResultEntity itself
-					resultEntities = append(resultEntities, result.ResultRelation{
+					resultEntities = append(resultEntities, transport.TransportRelation{
 						Context:    getRelationContextByAddressAndDirection(sourceAddress[0], sourceAddress[1], targetType, targetID, direction),
 						Properties: getRelationPropertiesByAddressAndDirection(sourceAddress[0], sourceAddress[1], targetType, targetID, direction),
-						Target: result.ResultEntity{
+						Target: transport.TransportEntity{
 							Type:            EntityTypes[entity.Type],
 							ID:              entity.ID,
 							Value:           entity.Value,
 							Context:         entity.Context,
 							Version:         entity.Version,
 							Properties:      props,
-							ParentRelations: []result.ResultRelation{},
-							ChildRelations:  []result.ResultRelation{},
+							ParentRelations: []transport.TransportRelation{},
+							ChildRelations:  []transport.TransportRelation{},
 						},
 					})
 				}
