@@ -50,6 +50,13 @@ var RelationRStorage = make(map[int]map[int]map[int]map[int]bool)
 // relation storage master mutex
 var RelationStorageMutex = &sync.RWMutex{}
 
+// direction constants
+const (
+	DIRECTION_PARENT = -1
+	DIRECTION_NONE   = 0
+	DIRECTION_CHILD  = 1
+)
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // + + + + + + + + + +  PUBLIC  + + + + + + + + + + +
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -126,6 +133,55 @@ func CreateEntityType(name string) (int, error) {
 	}
 	// - - - - - - - - - - - - - - - - -
 	EntityTypeMutex.Unlock()
+	return newID, nil
+}
+
+func CreateEntityTypeUnsafe(name string) (int, error) {
+	// lets check if the Type allready exists
+	// if it does we just return the ID
+	if id, ok := EntityRTypes[name]; ok {
+		// dont forget to unlock
+		return id, nil
+	}
+
+	// ok entity doesnt exist yet, lets
+	// upcount our ID Max and copy it
+	// into another variable so we can be sure
+	// between unlock of the ressource and return
+	// it doesnt get upcounted
+	EntityTypeIDMax++
+	var newID = EntityTypeIDMax
+
+	// finally create the new Type in our
+	// EntityTypes index and reverse index
+	EntityTypes[newID] = name
+	EntityRTypes[name] = newID
+
+	// now we prepare the submaps in the entity
+	// storage itseöf....
+	EntityStorage[newID] = make(map[int]types.StorageEntity)
+
+	// set the maxID for the new
+	// Type type
+	EntityIDMax[newID] = 0
+
+	// create the base maps in relation storage
+	RelationStorage[newID] = make(map[int]map[int]map[int]types.StorageRelation)
+	RelationRStorage[newID] = make(map[int]map[int]map[int]bool)
+
+	// and create the basic submaps for
+	// the relation storage
+	// now we unlock the mutex
+	// and return the new id
+	// - - - - - - - - - - - - - - - - -
+	// persistence.go handling
+	if true == persistence.PersistenceFlag {
+		persistence.PersistenceChan <- types.PersistencePayload{
+			Type:        "EntityType",
+			EntityTypes: EntityTypes,
+		}
+	}
+	// - - - - - - - - - - - - - - - - -
 	return newID, nil
 }
 
@@ -463,7 +519,7 @@ func GetEntityByPath(Type int, id int, context string) (types.StorageEntity, err
 
 	EntityStorageMutex.Unlock()
 
-	// the path seems to result empty , so
+	// the path seems to transport empty , so
 	// we throw an error
 	return types.StorageEntity{}, errors.New("Entity on given path does not exist.")
 }
@@ -478,7 +534,7 @@ func GetEntityByPathUnsafe(Type int, id int, context string) (types.StorageEntit
 		}
 	}
 
-	// the path seems to result empty , so
+	// the path seems to transport empty , so
 	// we throw an error
 	return types.StorageEntity{}, errors.New("Entity on given path does not exist.")
 }
@@ -1733,6 +1789,117 @@ func GetEntityAmountByType(intType int) (int, error) {
 
 	EntityStorageMutex.RUnlock()
 	return -1, errors.New("Entity Type does not exist")
+}
+
+func MapTransportData(data transport.TransportEntity) transport.TransportEntity {
+	// first we lock all the storages
+	EntityTypeMutex.Lock()
+	EntityStorageMutex.Lock()
+	RelationStorageMutex.Lock()
+
+	// lets start recursive mapping of the data
+	newID := mapRecursive(data, -1, -1, DIRECTION_NONE)
+
+	// now we unlock all the mutexes again
+	EntityTypeMutex.Unlock()
+	EntityStorageMutex.Unlock()
+	RelationStorageMutex.Unlock()
+
+	// we got it done lets wrap our data in an transport entity object
+	ret := transport.TransportEntity{
+		ID:         newID,
+		Type:       data.Type,
+		Value:      data.Value,
+		Properties: data.Properties,
+		Context:    data.Context,
+		Version:    1,
+	}
+
+	return ret
+}
+
+func mapRecursive(entity transport.TransportEntity, relatedType int, relatedID int, direction int) int {
+	// first we get the right TypeID
+	var TypeID int
+	TypeID, err := GetTypeIdByStringUnsafe(entity.Type)
+	if nil != err {
+		TypeID, _ = CreateEntityTypeUnsafe(entity.Type)
+	}
+
+	var mapID int
+	// lets see if theres an entity ID given, if its -1 the entity doesnt exist and we create it else we assume its a to map entity
+	if -1 == entity.ID {
+		// now we create the fitting entity
+		tmpEntity := types.StorageEntity{
+			ID:         -1,
+			Type:       TypeID,
+			Value:      entity.Value,
+			Context:    entity.Context,
+			Version:    1,
+			Properties: entity.Properties,
+		}
+		// now we create the entity
+		mapID, _ = CreateEntityUnsafe(tmpEntity)
+	} else {
+		// it seems we got an already existing entity given so we use this id to map
+		mapID = entity.ID
+	}
+
+	// lets map the child elements
+	if len(entity.ChildRelations) != 0 {
+		// there are children lets iteater over
+		// the map
+		for _, childRelation := range entity.ChildRelations {
+			// pas the child entity and the parent coords to
+			// create the relation after inserting the entity
+			mapRecursive(childRelation.Target, TypeID, mapID, DIRECTION_CHILD)
+		}
+	}
+	// than map the parent elements
+	if len(entity.ParentRelations) != 0 {
+		// there are children lets iteater over
+		// the map
+		for _, childRelation := range entity.ChildRelations {
+			// pas the child entity and the parent coords to
+			// create the relation after inserting the entity
+			mapRecursive(childRelation.Target, TypeID, mapID, DIRECTION_PARENT)
+		}
+	}
+	// now lets check if ourparent Type and id
+	// are not -1 , if so we need to create
+	// a relation
+	if relatedType != -1 && relatedID != -1 {
+		// lets create the relation to our parent
+		if DIRECTION_CHILD == direction {
+			// first we make sure the relation doesnt already exist (because we allow mapped existing data inside a to map json)
+			if !RelationExistsUnsafe(relatedType, relatedID, TypeID, mapID) {
+				tmpRelation := types.StorageRelation{
+					SourceType: relatedType,
+					SourceID:   relatedID,
+					TargetType: TypeID,
+					TargetID:   mapID,
+					Version:    1,
+				}
+				CreateRelationUnsafe(relatedType, relatedID, TypeID, mapID, tmpRelation)
+			}
+		} else if DIRECTION_PARENT == direction {
+			// first we make sure the relation doesnt already exist (because we allow mapped existing data inside a to map json)
+			if !RelationExistsUnsafe(TypeID, mapID, relatedType, relatedID) {
+				// or relation towards the child
+				tmpRelation := types.StorageRelation{
+					SourceType: TypeID,
+					SourceID:   mapID,
+					TargetType: relatedType,
+					TargetID:   relatedID,
+					Version:    1,
+				}
+				CreateRelationUnsafe(TypeID, mapID, relatedType, relatedID, tmpRelation)
+			}
+		}
+	}
+	// only the first return is interesting since it
+	// returns the most parent id
+	return mapID
 }
 
 func GetEntitiesByQueryFilter(
