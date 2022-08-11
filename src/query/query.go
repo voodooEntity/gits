@@ -2,7 +2,7 @@ package query
 
 import (
 	"github.com/voodooEntity/gits"
-	"github.com/voodooEntity/gits/src/result"
+	"github.com/voodooEntity/gits/src/transport"
 	"strings"
 )
 
@@ -128,10 +128,10 @@ func (self *Query) Set(key string, value string) *Query {
 	return self
 }
 
-func Execute(query *Query) result.Result {
+func Execute(query *Query) transport.Transport {
 	// if there are no filters something must be terribly wrong ### review this since we may have update/delete/create actions without filters
 	if 0 == len(query.Pool) {
-		return result.Result{}
+		return transport.Transport{}
 	}
 
 	// we are in the most outer layer so we gonne lock here,
@@ -169,11 +169,11 @@ func Execute(query *Query) result.Result {
 	// wo we have any hits?
 	if 0 == amount {
 		// no hits , are we in wrap?
-		return result.Result{}
+		return transport.Transport{}
 	}
 
 	// do we have child queries to execute recursive?
-	ret := result.Result{
+	ret := transport.Transport{
 		Amount: 0,
 	}
 
@@ -220,15 +220,15 @@ func Execute(query *Query) result.Result {
 	} else {
 		gits.EntityStorageMutex.Unlock()
 	}
-	return result.Result{}
+	return transport.Transport{}
 }
 
-func recursiveExecute(queries []Query, sourceAddress [2]int) ([]result.ResultRelation, []result.ResultRelation, int) {
-	var retParents []result.ResultRelation
-	var retChildren []result.ResultRelation
+func recursiveExecute(queries []Query, sourceAddress [2]int) ([]transport.TransportRelation, []transport.TransportRelation, int) {
+	var retParents []transport.TransportRelation
+	var retChildren []transport.TransportRelation
 	i := 0
 	for _, query := range queries {
-		var tmpRet []result.ResultRelation
+		var tmpRet []transport.TransportRelation
 		// parse the conditions into our 2 neccesary groups
 		baseMatchList, propertyMatchList := parseConditions(&query)
 
@@ -312,3 +312,42 @@ func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
 	}
 	return baseMatchList, propertyMatchList
 }
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - -
+/**
+Methods:
+-> READ
+-> REDUCE
+-> UPDATE
+-> DELETE
+-> COUNT
+
+Type:
+-> Entity
+-> Relation
+
+Filter:
+-> Value
+-> Context
+-> Property
+-> ID
+-> Type
+
+Compare Operators:
+-> equals
+-> prefix
+-> suffix
+-> substring
+-> >=
+-> <=
+-> ==
+
+AFTERPROCESSING:
+-> ORDER BY % ASC/DESC
+
+SPECIAL:
+-> LIMIT
+-> TRAVERSE
+-> RTRAVERSE
+
+*/
