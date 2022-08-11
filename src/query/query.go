@@ -34,7 +34,7 @@ type Query struct {
 	Mode               [][]string
 	Values             map[string]string
 	currConditionGroup int
-	Direction          int by
+	Direction          int
 }
 
 func New() *Query {
@@ -123,6 +123,11 @@ func (self *Query) SetDirection(direction int) *Query {
 	return self
 }
 
+func (self *Query) Set(key string, value string) *Query {
+	self.Values[key] = value
+	return self
+}
+
 func Execute(query *Query) result.Result {
 	// if there are no filters something must be terribly wrong ### review this since we may have update/delete/create actions without filters
 	if 0 == len(query.Pool) {
@@ -168,24 +173,25 @@ func Execute(query *Query) result.Result {
 	}
 
 	// do we have child queries to execute recursive?
-	var ret result.Result
+	ret := result.Result{
+		Amount: 0,
+	}
+
 	if 0 < len(query.Map) {
 		for key, entityAddress := range resultAddresses {
 			children, parents, amount := recursiveExecute(query.Map, entityAddress)
-			add := false
 			if 0 < len(children) {
 				resultData[key].ChildRelations = append(resultData[key].ChildRelations, children...)
-				add = true
 			}
 			if 0 < len(parents) {
 				resultData[key].ParentRelations = append(resultData[key].ParentRelations, parents...)
-				add = true
 			}
 			// do we have any data to add?
-			if true == add {
+			// if true == add { ### refactor add flag usage
+			if 0 < amount {
 				ret.Data = append(ret.Data, resultData[key])
+				ret.Amount++
 			}
-			ret.Amount = amount
 		}
 	} else {
 		ret.Data = resultData
@@ -202,9 +208,9 @@ func Execute(query *Query) result.Result {
 				gits.RelationStorageMutex.RUnlock()
 			}
 			return ret
-		case METHOD_CREATE:
 		case METHOD_UPDATE:
 		case METHOD_DELETE:
+		case METHOD_CREATE:
 		}
 	}
 
@@ -244,16 +250,17 @@ func recursiveExecute(queries []Query, sourceAddress [2]int) ([]result.ResultRel
 				children, parents, amount := recursiveExecute(query.Map, entityAddress)
 				if 0 < len(children) {
 					resultData[key].Target.ChildRelations = append(resultData[key].Target.ChildRelations, children...)
-					tmpRet = append(tmpRet, resultData[key])
 				}
 				if 0 < len(parents) {
 					resultData[key].Target.ParentRelations = append(resultData[key].Target.ParentRelations, children...)
-					tmpRet = append(tmpRet, resultData[key])
 				}
-				i = i + amount
+				if 0 < amount {
+					tmpRet = append(tmpRet, resultData[key])
+					i++
+				}
 			}
 		} else {
-			i = len(resultData) + i
+			i = amount
 			tmpRet = append(tmpRet, resultData...)
 		}
 		// if we got any results we add them
