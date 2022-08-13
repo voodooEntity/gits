@@ -6,6 +6,7 @@ import (
 	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits"
 	"github.com/voodooEntity/gits/src/query"
+	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
 	"strconv"
 	"time"
@@ -35,7 +36,9 @@ func main() {
 	//testFilterValueByGreaterThanMatch()
 	//testFilterValueBySmallerThanMatch()
 	//testFilterPropertyByExcactMatch()
-	testSimpleReadWithReduce()
+	//testSimpleReadWithReduce()
+	//testUpdateEntityValue()
+	testDeleteEntityByTypeAndID()
 	fmt.Println("Time took ", time.Since(start))
 }
 
@@ -242,6 +245,42 @@ func testSimpleRead() {
 	qry := query.New().Read("Alpha")
 	result := query.Execute(qry)
 	printData(result)
+}
+
+func testUpdateEntityValue() {
+	gits.CreateEntityType("Test")
+	gits.MapTransportData(transport.TransportEntity{
+		ID:      -1,
+		Type:    "Test",
+		Value:   "TestABC",
+		Context: "TestABC",
+	})
+	qry := query.New().Read("Test")
+	ret := query.Execute(qry)
+	printData(ret)
+	qry = query.New().Update("Test").Match("Value", "==", "TestABC").Set("Value", "TestDEF")
+	query.Execute(qry)
+	qry = query.New().Read("Test")
+	ret = query.Execute(qry)
+	printData(ret)
+}
+
+func testDeleteEntityByTypeAndID() {
+	gits.CreateEntityType("Test")
+	entity := gits.MapTransportData(transport.TransportEntity{
+		ID:      -1,
+		Type:    "Test",
+		Value:   "TestABC",
+		Context: "TestABC",
+	})
+	qry := query.New().Read("Test").Match("ID", "==", strconv.Itoa(entity.ID))
+	ret := query.Execute(qry)
+	printData(ret)
+	qry = query.New().Delete("Test").Match("ID", "==", strconv.Itoa(entity.ID))
+	query.Execute(qry)
+	qry = query.New().Read("Test").Match("ID", "==", strconv.Itoa(entity.ID))
+	ret = query.Execute(qry)
+	printData(ret)
 }
 
 func printData(data any) {

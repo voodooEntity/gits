@@ -21,9 +21,8 @@ const (
 const (
 	METHOD_READ   = 1
 	METHOD_REDUCE = 2
-	METHOD_CREATE = 3
-	METHOD_UPDATE = 4
-	METHOD_DELETE = 5
+	METHOD_UPDATE = 3
+	METHOD_DELETE = 4
 )
 
 type Query struct {
@@ -42,6 +41,7 @@ func New() *Query {
 		Conditions:         [][][3]string{},
 		currConditionGroup: 0,
 		Direction:          DIRECTION_NONE,
+		Values:             make(map[string]string),
 	}
 	return &tmp
 }
@@ -142,6 +142,7 @@ func Execute(query *Query) transport.Transport {
 		gits.EntityTypeMutex.RLock()
 		gits.EntityStorageMutex.RLock()
 	} else {
+		gits.EntityTypeMutex.Lock()
 		gits.EntityStorageMutex.Lock()
 	}
 
@@ -209,17 +210,30 @@ func Execute(query *Query) transport.Transport {
 			}
 			return ret
 		case METHOD_UPDATE:
+			// if we got any results and values to update given fire Batch update
+			if 0 < ret.Amount && 0 < len(query.Values) {
+				gits.BatchUpdateAddressList(resultAddresses, query.Values)
+			}
+			gits.EntityTypeMutex.Unlock()
+			gits.EntityStorageMutex.Unlock()
+			if unlockRelationStorage {
+				gits.RelationStorageMutex.Unlock()
+			}
+			return ret
 		case METHOD_DELETE:
-		case METHOD_CREATE:
+			if 0 < ret.Amount {
+				gits.BatchDeleteAddressList(resultAddresses)
+			}
+			gits.EntityTypeMutex.Unlock()
+			gits.EntityStorageMutex.Unlock()
+			if unlockRelationStorage {
+				gits.RelationStorageMutex.Unlock()
+			}
+			return ret
+			// case METHOD_CREATE: ### create to be handled by map call , maybe enable later
 		}
 	}
 
-	// finally check if we are in the wrapping query and unlock everything
-	if METHOD_READ == query.Method {
-		gits.EntityStorageMutex.RUnlock()
-	} else {
-		gits.EntityStorageMutex.Unlock()
-	}
 	return transport.Transport{}
 }
 
@@ -321,6 +335,8 @@ Methods:
 -> UPDATE
 -> DELETE
 -> COUNT
+-> LINK
+-> UNLINK
 
 Type:
 -> Entity
@@ -340,7 +356,8 @@ Compare Operators:
 -> substring
 -> >=
 -> <=
--> ==
+-> =
+-> in
 
 AFTERPROCESSING:
 -> ORDER BY % ASC/DESC

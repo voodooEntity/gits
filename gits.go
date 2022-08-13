@@ -2130,6 +2130,33 @@ func GetEntitiesByQueryFilterAndSourceAddress(
 	return resultEntities, resultAddresses, len(resultAddresses)
 }
 
+func BatchUpdateAddressList(addressList [][2]int, values map[string]string) {
+	for _, address := range addressList {
+		entity, _ := GetEntityByPathUnsafe(address[0], address[1], "")
+		for key, value := range values {
+			switch key {
+			case "Value":
+				entity.Value = value
+			case "Context":
+				entity.Context = value
+			default:
+				if -1 != strings.Index(key, "Properties") {
+					// ### we nmeed to prepare the map here if it doesnt exist
+					entity.Properties[key[11:]] = value
+				}
+			}
+		}
+		// ### handle errors
+		UpdateEntityUnsafe(entity)
+	}
+}
+
+func BatchDeleteAddressList(addressList [][2]int) {
+	for _, address := range addressList {
+		DeleteEntityUnsafe(address[0], address[1])
+	}
+}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // + + + + + + + + + +  PRIVATE  + + + + + + + + + + +
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
