@@ -22,7 +22,11 @@ const (
 	METHOD_READ   = 1
 	METHOD_REDUCE = 2
 	METHOD_UPDATE = 3
-	METHOD_DELETE = 4
+	METHOD_UPSERT = 4
+	METHOD_DELETE = 5
+	METHOD_COUNT  = 5
+	METHOD_LINK   = 6
+	METHOD_UNLINK = 7
 )
 
 type Query struct {
@@ -190,12 +194,12 @@ func Execute(query *Query) transport.Transport {
 			// do we have any data to add?
 			// if true == add { ### refactor add flag usage
 			if 0 < amount {
-				ret.Data = append(ret.Data, resultData[key])
+				ret.Entities = append(ret.Entities, resultData[key])
 				ret.Amount++
 			}
 		}
 	} else {
-		ret.Data = resultData
+		ret.Entities = resultData
 		ret.Amount = amount
 	}
 
@@ -330,41 +334,38 @@ func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 /**
 Methods:
--> READ
--> REDUCE
--> UPDATE
--> DELETE
--> COUNT
--> LINK
--> UNLINK
+-> READ     [x]
+-> REDUCE   [x]
+-> UPDATE   [x]
+-> DELETE   [x]
+-> COUNT    [ ]
+-> LINK     [ ]
+-> UNLINK   [ ]
 
-Type:
--> Entity
--> Relation
 
 Filter:
--> Value
--> Context
--> Property
--> ID
--> Type
+-> Value       [X]
+-> Context     [X]
+-> Property    [X]
+-> ID          [X]
+-> Type        [X]
 
 Compare Operators:
--> equals
--> prefix
--> suffix
--> substring
--> >=
--> <=
--> =
--> in
+-> equals           [X]
+-> prefix           [X]
+-> suffix           [X]
+-> substring        [X]
+-> >=               [X]
+-> <=               [X]
+-> =                [X]
+-> in               [X]
 
 AFTERPROCESSING:
--> ORDER BY % ASC/DESC
+-> ORDER BY % ASC/DESC  [ ]
 
 SPECIAL:
--> LIMIT
--> TRAVERSE
--> RTRAVERSE
+-> LIMIT       [ ]
+-> TRAVERSE    [ ]
+-> RTRAVERSE   [ ]
 
 */

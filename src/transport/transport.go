@@ -1,8 +1,9 @@
 package transport
 
 type Transport struct {
-	Data   []TransportEntity
-	Amount int
+	Entities  []TransportEntity
+	Relations []TransportRelation
+	Amount    int
 }
 
 type TransportEntity struct {
@@ -20,6 +21,10 @@ type TransportRelation struct {
 	Context    string
 	Properties map[string]string
 	Target     TransportEntity
+	SourceType string
+	SourceID   int
+	TargetType string
+	TargetID   int
 }
 
 func New() *Transport {
