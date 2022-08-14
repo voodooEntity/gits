@@ -304,7 +304,7 @@ func TestQueryLinkTo() {
 
 	// link the datasets
 	qry = query.New().Link("Test").Match("Value", "==", "TestABC").To(
-		query.New().Read("Test").Match("Value", "==", "TestDEF"),
+		query.New().Find("Test").Match("Value", "==", "TestDEF"),
 	)
 	query.Execute(qry)
 

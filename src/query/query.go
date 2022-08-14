@@ -30,6 +30,7 @@ const (
 	METHOD_LINK_TO   = 8
 	METHOD_LINK_FROM = 9
 	METHOD_UNLINK    = 10
+	METHOD_FIND      = 11
 )
 
 type Query struct {
@@ -65,6 +66,16 @@ func (self *Query) Read(etype ...string) *Query {
 
 func (self *Query) Reduce(etype ...string) *Query {
 	self.Method = METHOD_REDUCE
+	if 0 != len(etype) {
+		for _, entry := range etype {
+			self.Pool = append(self.Pool, entry)
+		}
+	}
+	return self
+}
+
+func (self *Query) Find(etype ...string) *Query {
+	self.Method = METHOD_FIND
 	if 0 != len(etype) {
 		for _, entry := range etype {
 			self.Pool = append(self.Pool, entry)
