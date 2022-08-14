@@ -53,8 +53,8 @@ var RelationStorageMutex = &sync.RWMutex{}
 
 // direction constants
 const (
-	DIRECTION_PARENT = -1
-	DIRECTION_NONE   = 0
+	DIRECTION_NONE   = -1
+	DIRECTION_PARENT = 0
 	DIRECTION_CHILD  = 1
 )
 
