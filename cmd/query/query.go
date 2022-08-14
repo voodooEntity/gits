@@ -38,7 +38,8 @@ func main() {
 	//testFilterPropertyByExcactMatch()
 	//testSimpleReadWithReduce()
 	//testUpdateEntityValue()
-	testDeleteEntityByTypeAndID()
+	//testDeleteEntityByTypeAndID()
+	TestQueryLinkTo()
 	fmt.Println("Time took ", time.Since(start))
 }
 
@@ -153,9 +154,9 @@ func createTestDataLinearTypeNumericPropertyTestValue() {
 
 func testBidirectionalJoin() {
 	createTestDataLinked()
-	qry := query.New().Read("Beta").Join(
+	qry := query.New().Read("Beta").To(
 		query.New().Read("Delta"),
-	).RJoin(
+	).From(
 		query.New().Read("Alpha"),
 	)
 	result := query.Execute(qry)
@@ -164,10 +165,10 @@ func testBidirectionalJoin() {
 
 func testBidrectionalJoinAndTurn() {
 	createTestDataLinked()
-	qry := query.New().Read("Beta").Join(
+	qry := query.New().Read("Beta").To(
 		query.New().Read("Delta"),
-	).RJoin(
-		query.New().Read("Alpha").Join(
+	).From(
+		query.New().Read("Alpha").To(
 			query.New().Read("Gamma").Read(),
 		),
 	)
@@ -184,8 +185,8 @@ func testSimpleReadMultiPool() {
 
 func testShowStephen() {
 	createTestDataLinked()
-	qry := query.New().Read("Signer").Match("Value", "=", "asdasdasdasd").RJoin(
-		query.New().Read("CollectionOffer", "TokenOffer").Join(
+	qry := query.New().Read("Signer").Match("Value", "=", "asdasdasdasd").From(
+		query.New().Read("CollectionOffer", "TokenOffer").To(
 			query.New().Read("Details"),
 		),
 	)
@@ -202,9 +203,9 @@ func testSimpleReadMultiPoolWithOrMatch() {
 
 func testBidirectionalJoinWithCondition() {
 	createTestDataLinked()
-	qry := query.New().Read("Beta").Join(
+	qry := query.New().Read("Beta").To(
 		query.New().Read("Delta"),
-	).RJoin(
+	).From(
 		query.New().Read("Alpha").Match("Context", "==", "uno").Match("Value", "==", "alpha"),
 	)
 	result := query.Execute(qry)
@@ -213,7 +214,7 @@ func testBidirectionalJoinWithCondition() {
 
 func testSingleJoinChild() {
 	createTestDataLinked()
-	qry := query.New().Read("Alpha").Join(
+	qry := query.New().Read("Alpha").To(
 		query.New().Read("Beta"),
 	)
 	result := query.Execute(qry)
@@ -222,8 +223,8 @@ func testSingleJoinChild() {
 
 func testDoubleDepthJoinChild() {
 	createTestDataLinked()
-	qry := query.New().Read("Alpha").Join(
-		query.New().Read("Beta").Join(
+	qry := query.New().Read("Alpha").To(
+		query.New().Read("Beta").To(
 			query.New().Read("Delta"),
 		),
 	)
@@ -233,7 +234,7 @@ func testDoubleDepthJoinChild() {
 
 func testSimpleReadWithReduce() {
 	createTestDataLinked()
-	qry := query.New().Read("Alpha").Join(
+	qry := query.New().Read("Alpha").To(
 		query.New().Reduce("Beta"),
 	)
 	result := query.Execute(qry)
@@ -280,6 +281,38 @@ func testDeleteEntityByTypeAndID() {
 	query.Execute(qry)
 	qry = query.New().Read("Test").Match("ID", "==", strconv.Itoa(entity.ID))
 	ret = query.Execute(qry)
+	printData(ret)
+}
+
+func TestQueryLinkTo() {
+	// create testdata
+	gits.CreateEntityType("Test")
+	gits.MapTransportData(transport.TransportEntity{
+		Type:  "Test",
+		ID:    -1,
+		Value: "TestABC",
+	})
+	gits.MapTransportData(transport.TransportEntity{
+		Type:  "Test",
+		ID:    -1,
+		Value: "TestDEF",
+	})
+
+	// print the testdata before linking
+	qry := query.New().Read("Test")
+	printData(query.Execute(qry))
+
+	// link the datasets
+	qry = query.New().Link("Test").Match("Value", "==", "TestABC").To(
+		query.New().Read("Test").Match("Value", "==", "TestDEF"),
+	)
+	query.Execute(qry)
+
+	// now read out to approve we gotr the linked data
+	qry = query.New().Read("Test").Match("Value", "==", "TestABC").To(
+		query.New().Read("Test"),
+	)
+	ret := query.Execute(qry)
 	printData(ret)
 }
 

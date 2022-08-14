@@ -2,6 +2,7 @@ package query
 
 import (
 	"github.com/voodooEntity/gits"
+	"github.com/voodooEntity/gits/src/mutexhandler"
 	"github.com/voodooEntity/gits/src/transport"
 	"strings"
 )
@@ -19,14 +20,16 @@ const (
 )
 
 const (
-	METHOD_READ   = 1
-	METHOD_REDUCE = 2
-	METHOD_UPDATE = 3
-	METHOD_UPSERT = 4
-	METHOD_DELETE = 5
-	METHOD_COUNT  = 5
-	METHOD_LINK   = 6
-	METHOD_UNLINK = 7
+	METHOD_READ      = 1
+	METHOD_REDUCE    = 2
+	METHOD_UPDATE    = 3
+	METHOD_UPSERT    = 4
+	METHOD_DELETE    = 5
+	METHOD_COUNT     = 6
+	METHOD_LINK      = 7
+	METHOD_LINK_TO   = 8
+	METHOD_LINK_FROM = 9
+	METHOD_UNLINK    = 10
 )
 
 type Query struct {
@@ -90,6 +93,16 @@ func (self *Query) Delete(etype ...string) *Query {
 	return self
 }
 
+func (self *Query) Link(etype ...string) *Query {
+	self.Method = METHOD_LINK
+	if 0 != len(etype) {
+		for _, entry := range etype {
+			self.Pool = append(self.Pool, entry)
+		}
+	}
+	return self
+}
+
 func (self *Query) Match(alpha string, operator string, beta string) *Query {
 	if 0 == len(self.Conditions) {
 		self.Conditions = make([][][3]string, 1)
@@ -105,13 +118,13 @@ func (self *Query) OrMatch(alpha string, operator string, beta string) *Query {
 	return self
 }
 
-func (self *Query) Join(query *Query) *Query {
+func (self *Query) To(query *Query) *Query {
 	query.SetDirection(DIRECTION_CHILD)
 	self.Map = append(self.Map, *query)
 	return self
 }
 
-func (self *Query) RJoin(query *Query) *Query {
+func (self *Query) From(query *Query) *Query {
 	query.SetDirection(DIRECTION_PARENT)
 	self.Map = append(self.Map, *query)
 	return self
@@ -138,65 +151,94 @@ func Execute(query *Query) transport.Transport {
 		return transport.Transport{}
 	}
 
+	// prepare mutex handler
+	mutexh := mutexhandler.New()
+
 	// we are in the most outer layer so we gonne lock here,
 	// also dispatch what type of mutex we need. if we only read
 	// we can work with a read lock, everything else will need a
 	// full lock
 	if METHOD_READ == query.Method {
-		gits.EntityTypeMutex.RLock()
-		gits.EntityStorageMutex.RLock()
+		mutexh.Apply(mutexhandler.EntityTypeRLock)
+		mutexh.Apply(mutexhandler.EntityStorageRLock)
 	} else {
-		gits.EntityTypeMutex.Lock()
-		gits.EntityStorageMutex.Lock()
+		mutexh.Apply(mutexhandler.EntityTypeLock)
+		mutexh.Apply(mutexhandler.EntityStorageLock)
 	}
 
 	// do we have any potential joins? if yes we need to read lock the relation storage
 	// ### maybe add lock for link() method later
-	unlockRelationStorage := false
 	if 0 < len(query.Map) {
-		gits.RelationStorageMutex.RLock()
-		unlockRelationStorage = true
+		// if its link method or unlink method we need to write lock the relation storage
+		if METHOD_LINK == query.Method || METHOD_UNLINK == query.Method {
+			mutexh.Apply(mutexhandler.RelationStorageLock)
+		} else {
+			mutexh.Apply(mutexhandler.RelationStorageRLock)
+		}
+	}
+
+	// some dispatches for special query variables
+	// do we need to return the data itself?
+	returnDataFlag := false
+	linked := true
+	linkAddresses := [2][][2]int{}
+	linkAmount := 0
+	if METHOD_READ == query.Method {
+		returnDataFlag = true
+	}
+	// is it a link query ? needs to be handled different
+	if METHOD_LINK == query.Method {
+		linked = false
 	}
 
 	// parse the conditions into our 2 neccesary groups
 	baseMatchList, propertyMatchList := parseConditions(query)
 
-	// do we need to return the data itself?
-	returnDataFlag := false
-	if METHOD_READ == query.Method {
-		returnDataFlag = true
-	}
-
 	// now we need to fetch the list of entities fitting to our filters
 	//var addressList [][2]int
 	resultData, resultAddresses, amount := gits.GetEntitiesByQueryFilter(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, returnDataFlag)
 
-	// wo we have any hits?
-	if 0 == amount {
-		// no hits , are we in wrap?
-		return transport.Transport{}
-	}
-
-	// do we have child queries to execute recursive?
+	// prepare transport data
 	ret := transport.Transport{
 		Amount: 0,
 	}
 
+	// wo we have any hits?
+	if 0 == amount {
+		// no hits
+		mutexh.Release()
+		return ret
+	}
+
+	// do we have child queries to execute recursive?
 	if 0 < len(query.Map) {
-		for key, entityAddress := range resultAddresses {
-			children, parents, amount := recursiveExecute(query.Map, entityAddress)
-			if 0 < len(children) {
-				resultData[key].ChildRelations = append(resultData[key].ChildRelations, children...)
+		// do we work with linked data?
+		if linked {
+			for key, entityAddress := range resultAddresses {
+				children, parents, amount := recursiveExecuteLinked(query.Map, entityAddress)
+				if 0 < len(children) {
+					resultData[key].ChildRelations = append(resultData[key].ChildRelations, children...)
+				}
+				if 0 < len(parents) {
+					resultData[key].ParentRelations = append(resultData[key].ParentRelations, parents...)
+				}
+				// do we have any data to add?
+				// if true == add { ### refactor add flag usage
+				if 0 < amount {
+					ret.Entities = append(ret.Entities, resultData[key])
+					ret.Amount++
+				}
 			}
-			if 0 < len(parents) {
-				resultData[key].ParentRelations = append(resultData[key].ParentRelations, parents...)
+		} else { // unlinked data - for now the only case for this is the LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
+			for _, targetQuery := range query.Map {
+				tagretBaseMatchList, targetPopertyMatchList := parseConditions(&targetQuery)
+				_, tmpLinkAddresses, tmpLinkAmount := gits.GetEntitiesByQueryFilter(targetQuery.Pool, targetQuery.Conditions, tagretBaseMatchList[FILTER_ID], tagretBaseMatchList[FILTER_VALUE], tagretBaseMatchList[FILTER_CONTEXT], targetPopertyMatchList, false)
+				if 0 < tmpLinkAmount {
+					linkAddresses[targetQuery.Direction] = append(linkAddresses[targetQuery.Direction], tmpLinkAddresses...)
+					linkAmount = linkAmount + tmpLinkAmount
+				}
 			}
-			// do we have any data to add?
-			// if true == add { ### refactor add flag usage
-			if 0 < amount {
-				ret.Entities = append(ret.Entities, resultData[key])
-				ret.Amount++
-			}
+			ret.Amount = amount
 		}
 	} else {
 		ret.Entities = resultData
@@ -207,41 +249,46 @@ func Execute(query *Query) transport.Transport {
 		// now we need to dispatch based on method what we gonne do
 		switch query.Method {
 		case METHOD_READ:
-			gits.EntityTypeMutex.RUnlock()
-			gits.EntityStorageMutex.RUnlock()
-			if unlockRelationStorage {
-				gits.RelationStorageMutex.RUnlock()
-			}
+			mutexh.Release()
 			return ret
 		case METHOD_UPDATE:
 			// if we got any results and values to update given fire Batch update
-			if 0 < ret.Amount && 0 < len(query.Values) {
+			if 0 < len(query.Values) {
 				gits.BatchUpdateAddressList(resultAddresses, query.Values)
 			}
-			gits.EntityTypeMutex.Unlock()
-			gits.EntityStorageMutex.Unlock()
-			if unlockRelationStorage {
-				gits.RelationStorageMutex.Unlock()
-			}
+			mutexh.Release()
 			return ret
 		case METHOD_DELETE:
-			if 0 < ret.Amount {
-				gits.BatchDeleteAddressList(resultAddresses)
-			}
-			gits.EntityTypeMutex.Unlock()
-			gits.EntityStorageMutex.Unlock()
-			if unlockRelationStorage {
-				gits.RelationStorageMutex.Unlock()
-			}
+			gits.BatchDeleteAddressList(resultAddresses)
+			mutexh.Release()
 			return ret
+		case METHOD_LINK:
+			affectedAmount := 0
+			if 0 < linkAmount {
+				for direction, tmpLinkAddresses := range linkAddresses {
+					if 0 < len(tmpLinkAddresses) {
+						if DIRECTION_CHILD == direction {
+							affectedAmount += gits.LinkAddressLists(resultAddresses, tmpLinkAddresses)
+						} else { // else it must be towards parent so we flip params
+							affectedAmount += gits.LinkAddressLists(tmpLinkAddresses, resultAddresses)
+						}
+					}
+				}
+			}
+			ret.Amount = affectedAmount
+			mutexh.Release()
+			return ret
+		case METHOD_UNLINK:
 			// case METHOD_CREATE: ### create to be handled by map call , maybe enable later
 		}
 	}
 
+	// if there were no results we still need to unlock all the mutex
+	mutexh.Release()
 	return transport.Transport{}
 }
 
-func recursiveExecute(queries []Query, sourceAddress [2]int) ([]transport.TransportRelation, []transport.TransportRelation, int) {
+func recursiveExecuteLinked(queries []Query, sourceAddress [2]int) ([]transport.TransportRelation, []transport.TransportRelation, int) {
 	var retParents []transport.TransportRelation
 	var retChildren []transport.TransportRelation
 	i := 0
@@ -265,7 +312,7 @@ func recursiveExecute(queries []Query, sourceAddress [2]int) ([]transport.Transp
 		// since we got data we gonne get recursive from here
 		if 0 < len(query.Map) {
 			for key, entityAddress := range resultAddresses {
-				children, parents, amount := recursiveExecute(query.Map, entityAddress)
+				children, parents, amount := recursiveExecuteLinked(query.Map, entityAddress)
 				if 0 < len(children) {
 					resultData[key].Target.ChildRelations = append(resultData[key].Target.ChildRelations, children...)
 				}
@@ -350,6 +397,7 @@ Filter:
 -> ID          [X]
 -> Type        [X]
 
+
 Compare Operators:
 -> equals           [X]
 -> prefix           [X]
@@ -360,8 +408,10 @@ Compare Operators:
 -> =                [X]
 -> in               [X]
 
+
 AFTERPROCESSING:
 -> ORDER BY % ASC/DESC  [ ]
+
 
 SPECIAL:
 -> LIMIT       [ ]

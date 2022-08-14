@@ -3,6 +3,7 @@ package gits
 // handle all the imports
 import (
 	"errors"
+	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits/src/persistence"
 	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
@@ -1084,7 +1085,6 @@ func RelationExistsUnsafe(srcType int, srcID int, targetType int, targetID int) 
 		if srcIDMap, secondOk := srcTypeMap[srcID]; secondOk {
 			if targetTypeMap, thirdOk := srcIDMap[targetType]; thirdOk {
 				if _, fourthOk := targetTypeMap[targetID]; fourthOk {
-					RelationStorageMutex.RUnlock()
 					return true
 				}
 			}
@@ -2155,6 +2155,26 @@ func BatchDeleteAddressList(addressList [][2]int) {
 	for _, address := range addressList {
 		DeleteEntityUnsafe(address[0], address[1])
 	}
+}
+
+func LinkAddressLists(from [][2]int, to [][2]int) int {
+	linkedAmount := 0
+	for _, singleFrom := range from {
+		for _, singleTo := range to {
+			// do we already have a relation between those too?`if not we create it
+			if !RelationExistsUnsafe(singleFrom[0], singleFrom[1], singleTo[0], singleTo[1]) {
+				CreateRelationUnsafe(singleFrom[0], singleFrom[1], singleTo[0], singleTo[1], types.StorageRelation{
+					SourceType: singleFrom[0],
+					SourceID:   singleFrom[1],
+					TargetType: singleTo[0],
+					TargetID:   singleTo[1],
+				})
+				archivist.Info("Creating link from to ", singleFrom[0], singleFrom[1], singleTo[0], singleTo[1])
+				linkedAmount++
+			}
+		}
+	}
+	return linkedAmount
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
