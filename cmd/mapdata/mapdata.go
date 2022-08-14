@@ -48,8 +48,8 @@ func testNewMappedStructure() {
 	id := gits.MapTransportData(testdata)
 	archivist.Info("Retrieved new ID", id)
 	archivist.Info("Reading out the data using query")
-	search := query.New().Read("IP").Match("Value", "==", "127.0.0.1").Join(
-		query.New().Read("Port").Join(
+	search := query.New().Read("IP").Match("Value", "==", "127.0.0.1").To(
+		query.New().Read("Port").To(
 			query.New().Read("Software"),
 		),
 	)
@@ -98,8 +98,8 @@ func testNewMappedStructureWithExistingEntity() {
 	id := gits.MapTransportData(testdata)
 	archivist.Info("Retrieved new ID", id)
 	archivist.Info("Reading out the data using query")
-	search := query.New().Read("IP").Match("Value", "==", "127.0.0.1").Join(
-		query.New().Read("Port").Join(
+	search := query.New().Read("IP").Match("Value", "==", "127.0.0.1").To(
+		query.New().Read("Port").To(
 			query.New().Read("Software"),
 		),
 	)
@@ -166,9 +166,9 @@ func testNewMappedStructureWithExistingMappedStructureEntity() {
 	id := gits.MapTransportData(testdata)
 	archivist.Info("Retrieved new ID", id)
 	archivist.Info("Reading out the data using query")
-	search := query.New().Read("IP").Match("Value", "==", "127.0.0.1").Join(
-		query.New().Read("Port").Join(
-			query.New().Read("Software").Join(
+	search := query.New().Read("IP").Match("Value", "==", "127.0.0.1").To(
+		query.New().Read("Port").To(
+			query.New().Read("Software").To(
 				query.New().Read("Status"),
 			),
 		),

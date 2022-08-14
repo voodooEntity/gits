@@ -39,7 +39,8 @@ func main() {
 	//testSimpleReadWithReduce()
 	//testUpdateEntityValue()
 	//testDeleteEntityByTypeAndID()
-	TestQueryLinkTo()
+	//testQueryLinkTo()
+	testQueryLinkFrom()
 	fmt.Println("Time took ", time.Since(start))
 }
 
@@ -284,7 +285,7 @@ func testDeleteEntityByTypeAndID() {
 	printData(ret)
 }
 
-func TestQueryLinkTo() {
+func testQueryLinkTo() {
 	// create testdata
 	gits.CreateEntityType("Test")
 	gits.MapTransportData(transport.TransportEntity{
@@ -310,6 +311,38 @@ func TestQueryLinkTo() {
 
 	// now read out to approve we gotr the linked data
 	qry = query.New().Read("Test").Match("Value", "==", "TestABC").To(
+		query.New().Read("Test"),
+	)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testQueryLinkFrom() {
+	// create testdata
+	gits.CreateEntityType("Test")
+	gits.MapTransportData(transport.TransportEntity{
+		Type:  "Test",
+		ID:    -1,
+		Value: "TestABC",
+	})
+	gits.MapTransportData(transport.TransportEntity{
+		Type:  "Test",
+		ID:    -1,
+		Value: "TestDEF",
+	})
+
+	// print the testdata before linking
+	qry := query.New().Read("Test")
+	printData(query.Execute(qry))
+
+	// link the datasets
+	qry = query.New().Link("Test").Match("Value", "==", "TestABC").From(
+		query.New().Find("Test").Match("Value", "==", "TestDEF"),
+	)
+	query.Execute(qry)
+
+	// now read out to approve we gotr the linked data
+	qry = query.New().Read("Test").Match("Value", "==", "TestABC").From(
 		query.New().Read("Test"),
 	)
 	ret := query.Execute(qry)

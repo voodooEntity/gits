@@ -14,23 +14,21 @@ const (
 )
 
 const (
-	DIRECTION_PARENT = -1
-	DIRECTION_NONE   = 0
+	DIRECTION_NONE   = -1
+	DIRECTION_PARENT = 0
 	DIRECTION_CHILD  = 1
 )
 
 const (
-	METHOD_READ      = 1
-	METHOD_REDUCE    = 2
-	METHOD_UPDATE    = 3
-	METHOD_UPSERT    = 4
-	METHOD_DELETE    = 5
-	METHOD_COUNT     = 6
-	METHOD_LINK      = 7
-	METHOD_LINK_TO   = 8
-	METHOD_LINK_FROM = 9
-	METHOD_UNLINK    = 10
-	METHOD_FIND      = 11
+	METHOD_READ   = 1
+	METHOD_REDUCE = 2
+	METHOD_UPDATE = 3
+	METHOD_UPSERT = 4
+	METHOD_DELETE = 5
+	METHOD_COUNT  = 6
+	METHOD_LINK   = 7
+	METHOD_UNLINK = 8
+	METHOD_FIND   = 9
 )
 
 type Query struct {
@@ -223,7 +221,7 @@ func Execute(query *Query) transport.Transport {
 
 	// do we have child queries to execute recursive?
 	if 0 < len(query.Map) {
-		// do we work with linked data?
+		// do we work with linked data? this gonne be the main case
 		if linked {
 			for key, entityAddress := range resultAddresses {
 				children, parents, amount := recursiveExecuteLinked(query.Map, entityAddress)
@@ -240,7 +238,7 @@ func Execute(query *Query) transport.Transport {
 					ret.Amount++
 				}
 			}
-		} else { // unlinked data - for now the only case for this is the LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
+		} else { // unlinked data - for now the only case for this is the METHOD_LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
 			for _, targetQuery := range query.Map {
 				tagretBaseMatchList, targetPopertyMatchList := parseConditions(&targetQuery)
 				_, tmpLinkAddresses, tmpLinkAmount := gits.GetEntitiesByQueryFilter(targetQuery.Pool, targetQuery.Conditions, tagretBaseMatchList[FILTER_ID], tagretBaseMatchList[FILTER_VALUE], tagretBaseMatchList[FILTER_CONTEXT], targetPopertyMatchList, false)
@@ -290,7 +288,7 @@ func Execute(query *Query) transport.Transport {
 			mutexh.Release()
 			return ret
 		case METHOD_UNLINK:
-			// case METHOD_CREATE: ### create to be handled by map call , maybe enable later
+
 		}
 	}
 
@@ -396,9 +394,9 @@ Methods:
 -> REDUCE   [x]
 -> UPDATE   [x]
 -> DELETE   [x]
--> COUNT    [ ]
--> LINK     [ ]
+-> LINK     [X]
 -> UNLINK   [ ]
+-> COUNT    [ ]
 
 
 Filter:
