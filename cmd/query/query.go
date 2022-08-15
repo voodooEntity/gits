@@ -40,7 +40,9 @@ func main() {
 	//testUpdateEntityValue()
 	//testDeleteEntityByTypeAndID()
 	//testQueryLinkTo()
-	testQueryLinkFrom()
+	//testQueryLinkFrom()
+	//testQueryUnlink()
+	testQueryUnlinkReverse()
 	fmt.Println("Time took ", time.Since(start))
 }
 
@@ -347,6 +349,86 @@ func testQueryLinkFrom() {
 	)
 	ret := query.Execute(qry)
 	printData(ret)
+}
+
+func testQueryUnlink() {
+	gits.CreateEntityType("TestA")
+	gits.CreateEntityType("TestB")
+	testdata := transport.TransportEntity{
+		ID:    -1,
+		Type:  "TestA",
+		Value: "Something",
+		ChildRelations: []transport.TransportRelation{
+			{
+				Context: "Something",
+				Target: transport.TransportEntity{
+					ID:    -1,
+					Type:  "TestB",
+					Value: "Else",
+				},
+			},
+		},
+	}
+	gits.MapTransportData(testdata)
+
+	// read linked inserted data
+	qry := query.New().Read("TestA").Match("Value", "==", "Something").To(
+		query.New().Read("TestB").Match("Value", "==", "Else"),
+	)
+	printData(query.Execute(qry))
+
+	// unlink the data
+	qry = query.New().Unlink("TestA").Match("Value", "==", "Something").To(
+		query.New().Find("TestB").Match("Value", "==", "Else"),
+	)
+	query.Execute(qry)
+
+	// read linked inserted data
+	qry = query.New().Read("TestA").Match("Value", "==", "Something").To(
+		query.New().Read("TestB").Match("Value", "==", "Else"),
+	)
+	printData(query.Execute(qry))
+
+}
+
+func testQueryUnlinkReverse() {
+	gits.CreateEntityType("TestA")
+	gits.CreateEntityType("TestB")
+	testdata := transport.TransportEntity{
+		ID:    -1,
+		Type:  "TestB",
+		Value: "Else",
+		ChildRelations: []transport.TransportRelation{
+			{
+				Context: "Something",
+				Target: transport.TransportEntity{
+					ID:    -1,
+					Type:  "TestA",
+					Value: "Something",
+				},
+			},
+		},
+	}
+	gits.MapTransportData(testdata)
+
+	// read linked inserted data
+	qry := query.New().Read("TestA").Match("Value", "==", "Something").From(
+		query.New().Read("TestB").Match("Value", "==", "Else"),
+	)
+	printData(query.Execute(qry))
+
+	// unlink the data
+	qry = query.New().Unlink("TestA").Match("Value", "==", "Something").From(
+		query.New().Find("TestB").Match("Value", "==", "Else"),
+	)
+	query.Execute(qry)
+
+	// read linked inserted data
+	qry = query.New().Read("TestA").Match("Value", "==", "Something").From(
+		query.New().Read("TestB").Match("Value", "==", "Else"),
+	)
+	printData(query.Execute(qry))
+
 }
 
 func printData(data any) {

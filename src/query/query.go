@@ -1,6 +1,7 @@
 package query
 
 import (
+	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits"
 	"github.com/voodooEntity/gits/src/mutexhandler"
 	"github.com/voodooEntity/gits/src/transport"
@@ -112,6 +113,16 @@ func (self *Query) Link(etype ...string) *Query {
 	return self
 }
 
+func (self *Query) Unlink(etype ...string) *Query {
+	self.Method = METHOD_UNLINK
+	if 0 != len(etype) {
+		for _, entry := range etype {
+			self.Pool = append(self.Pool, entry)
+		}
+	}
+	return self
+}
+
 func (self *Query) Match(alpha string, operator string, beta string) *Query {
 	if 0 == len(self.Conditions) {
 		self.Conditions = make([][][3]string, 1)
@@ -189,6 +200,7 @@ func Execute(query *Query) transport.Transport {
 	// some dispatches for special query variables
 	// do we need to return the data itself?
 	returnDataFlag := false
+	var addressPairs [][4]int
 	linked := true
 	linkAddresses := [2][][2]int{}
 	linkAmount := 0
@@ -224,19 +236,27 @@ func Execute(query *Query) transport.Transport {
 		// do we work with linked data? this gonne be the main case
 		if linked {
 			for key, entityAddress := range resultAddresses {
-				children, parents, amount := recursiveExecuteLinked(query.Map, entityAddress)
+				// recursive execute our actions
+				children, parents, tmpAddressPairs, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairs)
+				// append the current addresspairs since it can be used for unlinking or other funny stuff
+				addressPairs = append(addressPairs, tmpAddressPairs...) // i dont like it but ok for now ### todo overthink
+				// now if given store children and parents entities
 				if 0 < len(children) {
 					resultData[key].ChildRelations = append(resultData[key].ChildRelations, children...)
 				}
 				if 0 < len(parents) {
 					resultData[key].ParentRelations = append(resultData[key].ParentRelations, parents...)
 				}
-				// do we have any data to add?
-				// if true == add { ### refactor add flag usage
+
+				// are there any results?
 				if 0 < amount {
-					ret.Entities = append(ret.Entities, resultData[key])
 					ret.Amount++
+					// do we have any data to add? (and it is a read)
+					if METHOD_READ == query.Method {
+						ret.Entities = append(ret.Entities, resultData[key])
+					}
 				}
+
 			}
 		} else { // unlinked data - for now the only case for this is the METHOD_LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
 			for _, targetQuery := range query.Map {
@@ -288,7 +308,16 @@ func Execute(query *Query) transport.Transport {
 			mutexh.Release()
 			return ret
 		case METHOD_UNLINK:
-
+			affectedAmount := 0
+			if 0 < len(addressPairs) {
+				for _, addressPair := range addressPairs {
+					gits.DeleteRelationUnsafe(addressPair[0], addressPair[1], addressPair[2], addressPair[3])
+					affectedAmount++
+				}
+			}
+			ret.Amount = affectedAmount
+			mutexh.Release()
+			return ret
 		}
 	}
 
@@ -297,7 +326,7 @@ func Execute(query *Query) transport.Transport {
 	return transport.Transport{}
 }
 
-func recursiveExecuteLinked(queries []Query, sourceAddress [2]int) ([]transport.TransportRelation, []transport.TransportRelation, int) {
+func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairList [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
 	var retParents []transport.TransportRelation
 	var retChildren []transport.TransportRelation
 	i := 0
@@ -321,7 +350,15 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int) ([]transport.
 		// since we got data we gonne get recursive from here
 		if 0 < len(query.Map) {
 			for key, entityAddress := range resultAddresses {
-				children, parents, amount := recursiveExecuteLinked(query.Map, entityAddress)
+				// further execute and store data on return
+				children, parents, tmpAddressList, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairList)
+				if DIRECTION_CHILD == query.Direction {
+					tmpAddressList = append(tmpAddressList, [4]int{sourceAddress[0], sourceAddress[1], entityAddress[0], entityAddress[1]})
+				} else {
+					tmpAddressList = append(tmpAddressList, [4]int{entityAddress[0], entityAddress[1], sourceAddress[0], sourceAddress[1]})
+				}
+				archivist.Info("why Oo", tmpAddressList)
+				addressPairList = append(addressPairList, tmpAddressList...)
 				if 0 < len(children) {
 					resultData[key].Target.ChildRelations = append(resultData[key].Target.ChildRelations, children...)
 				}
@@ -334,6 +371,15 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int) ([]transport.
 				}
 			}
 		} else {
+			// there must be a smarter way for the following problem:
+			for _, entityAddress := range resultAddresses {
+				if DIRECTION_CHILD == query.Direction {
+					addressPairList = append(addressPairList, [4]int{sourceAddress[0], sourceAddress[1], entityAddress[0], entityAddress[1]})
+				} else {
+					addressPairList = append(addressPairList, [4]int{entityAddress[0], entityAddress[1], sourceAddress[0], sourceAddress[1]})
+				}
+			}
+			// - - - - - - - - - - - - - - - - - -
 			i = amount
 			tmpRet = append(tmpRet, resultData...)
 		}
@@ -347,9 +393,8 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int) ([]transport.
 				retParents = append(retParents, tmpRet...)
 			}
 		}
-
 	}
-	return retChildren, retParents, i
+	return retChildren, retParents, addressPairList, i
 }
 
 func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
@@ -378,7 +423,7 @@ func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
 				baseMatchList[FILTER_CONTEXT][conditionGroupKey] = append(baseMatchList[FILTER_CONTEXT][conditionGroupKey], conditionKey)
 			default:
 				if -1 != strings.Index(conditionValue[0], "Properties") {
-					// ### we nmeed to prepare the map here if it doesnt exist
+					// ### we need to prepare the map here if it doesn't exist
 					propertyMatchList[conditionGroupKey][conditionValue[0][11:]] = append(propertyMatchList[conditionGroupKey][conditionValue[0][11:]], conditionKey)
 				}
 			}
@@ -395,7 +440,7 @@ Methods:
 -> UPDATE   [x]
 -> DELETE   [x]
 -> LINK     [X]
--> UNLINK   [ ]
+-> UNLINK   [X]
 -> COUNT    [ ]
 
 
@@ -426,5 +471,4 @@ SPECIAL:
 -> LIMIT       [ ]
 -> TRAVERSE    [ ]
 -> RTRAVERSE   [ ]
-
 */
