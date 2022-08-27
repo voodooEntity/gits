@@ -1,7 +1,6 @@
 package query
 
 import (
-	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits"
 	"github.com/voodooEntity/gits/src/mutexhandler"
 	"github.com/voodooEntity/gits/src/transport"
@@ -41,6 +40,7 @@ type Query struct {
 	Values             map[string]string
 	currConditionGroup int
 	Direction          int
+	Required           bool
 }
 
 func New() *Query {
@@ -49,6 +49,7 @@ func New() *Query {
 		currConditionGroup: 0,
 		Direction:          DIRECTION_NONE,
 		Values:             make(map[string]string),
+		Required:           true,
 	}
 	return &tmp
 }
@@ -140,12 +141,28 @@ func (self *Query) OrMatch(alpha string, operator string, beta string) *Query {
 
 func (self *Query) To(query *Query) *Query {
 	query.SetDirection(DIRECTION_CHILD)
+	query.Required = true
 	self.Map = append(self.Map, *query)
 	return self
 }
 
 func (self *Query) From(query *Query) *Query {
 	query.SetDirection(DIRECTION_PARENT)
+	query.Required = true
+	self.Map = append(self.Map, *query)
+	return self
+}
+
+func (self *Query) CanTo(query *Query) *Query {
+	query.SetDirection(DIRECTION_CHILD)
+	query.Required = false
+	self.Map = append(self.Map, *query)
+	return self
+}
+
+func (self *Query) CanFrom(query *Query) *Query {
+	query.SetDirection(DIRECTION_PARENT)
+	query.Required = false
 	self.Map = append(self.Map, *query)
 	return self
 }
@@ -256,7 +273,6 @@ func Execute(query *Query) transport.Transport {
 						ret.Entities = append(ret.Entities, resultData[key])
 					}
 				}
-
 			}
 		} else { // unlinked data - for now the only case for this is the METHOD_LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
 			for _, targetQuery := range query.Map {
@@ -357,7 +373,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 				} else {
 					tmpAddressList = append(tmpAddressList, [4]int{entityAddress[0], entityAddress[1], sourceAddress[0], sourceAddress[1]})
 				}
-				archivist.Info("why Oo", tmpAddressList)
+
 				addressPairList = append(addressPairList, tmpAddressList...)
 				if 0 < len(children) {
 					resultData[key].Target.ChildRelations = append(resultData[key].Target.ChildRelations, children...)
@@ -465,7 +481,7 @@ Compare Operators:
 
 AFTERPROCESSING:
 -> ORDER BY % ASC/DESC  [ ]
-
+-> CONSOLIDATE_RESULTS  [ ]
 
 SPECIAL:
 -> LIMIT       [ ]
