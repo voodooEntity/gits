@@ -42,7 +42,17 @@ func main() {
 	//testQueryLinkTo()
 	//testQueryLinkFrom()
 	//testQueryUnlink()
-	testQueryUnlinkReverse()
+	//testQueryUnlinkReverse()
+	//buildTestQueryJson()
+	//buildTestQueryJson2()
+	//buildTestQueryJson3()
+	//buildTestQueryJsonGetQbQueries()
+	//testOptionalQueryJoinFirstLevel()
+	//testRequiredQueryJoinFirstLevelSuccess()
+	//testRequiredQueryJoinFirstLevelFail()
+	//testRequiredQueryJoinInDepthFail()
+	//testRequiredQueryJoinInDepthSuccess()
+	testRequiredAndOptionalMixed()
 	fmt.Println("Time took ", time.Since(start))
 }
 
@@ -262,7 +272,7 @@ func testUpdateEntityValue() {
 	qry := query.New().Read("Test")
 	ret := query.Execute(qry)
 	printData(ret)
-	qry = query.New().Update("Test").Match("Value", "==", "TestABC").Set("Value", "TestDEF")
+	qry = query.New().Update("Test").Match("Value", "==", "TestABC").Set("Value", "TestDEF").Set("Context", "asdasdasd")
 	query.Execute(qry)
 	qry = query.New().Read("Test")
 	ret = query.Execute(qry)
@@ -431,7 +441,261 @@ func testQueryUnlinkReverse() {
 
 }
 
+func buildTestQueryJson() {
+	qry := query.New().Read("IP").To(
+		query.New().Read("Port").To(
+			query.New().Read("Software"),
+		),
+	)
+	printData(qry)
+}
+
+func buildTestQueryJson2() {
+	qry := query.New().Read("IP").To(
+		query.New().Read("Port").To(
+			query.New().Read("Software").To(
+				query.New().Read("Vhost"),
+			),
+		),
+	)
+	printData(qry)
+}
+
+func buildTestQueryJson3() {
+	qry := query.New().Read("IP").To(
+		query.New().Read("Port").To(
+			query.New().Read("Software").To(
+				query.New().Read("Vhost"),
+			),
+		).To(
+			query.New().Read("Software"),
+		),
+	)
+	printData(qry)
+}
+
+func buildTestQueryJsonGetQbQueries() {
+	//
+	archivist.Info("Get all marketplaces implemented by Max Mustermann from person")
+	qry := query.New().Read("Person").Match("Value", "==", "Max Mustermann").To(
+		query.New().Read("Marketplace").Match("Properties.IsAbstract", "==", "false"),
+	).To(
+		query.New().Read("Marketplace").To(
+			query.New().Read("Marketplace"),
+		),
+	)
+	//printData(qry)
+
+	//
+	archivist.Info("Get all marketplaces shipping to germany")
+	qry = query.New().Read("Marketplace").To(
+		query.New().Reduce("Country").Match("Value", "==", "Germany"),
+	)
+	//printData(qry)
+
+	//
+	archivist.Info("Get all marketplaces ")
+	qry = query.New().Read("Person").Match("Value", "==", "Max Mustermann").To(
+		query.New().Read("Marketplace"),
+	).To(
+		query.New().Read("Marketplace").To(
+			query.New().Read("Marketplace"),
+		),
+	)
+	printData(qry)
+
+	archivist.Info("Get Person that implemented marketplace")
+	qry = query.New().Read("Marketplace").From(
+		query.New().Read("Person"),
+	)
+	//printData(qry)
+}
+
+func testRequiredAndOptionalMixed() {
+	// create the testdata
+	testdata := testQbStructureMap()
+	gits.MapTransportData(testdata)
+
+	archivist.Info(" - - - - - - - - - - - - -  Test forced 2 depth marketplace - - - - - - - - - - - - - -")
+	//qry := query.New().Read("Person").To(
+	//	query.New().Read("Marketplace").To(
+	//		query.New().Read("Marketplace"),
+	//	).To(
+	//		query.New().Read("Marketplace"),
+	//	),
+	//)
+	//ret := query.Execute(qry)
+	//printData(ret)
+	archivist.Info(" - - - - - - - - - Test forced 1 depth marketplace and 2nmd depth optional  - - - - - - - - -")
+	qry := query.New().Read("Person").To(
+		query.New().Read("Marketplace").CanTo(
+			query.New().Read("Marketplace"),
+		),
+	)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testOptionalQueryJoinFirstLevel() {
+	testdata := testQbStructureMap()
+	gits.MapTransportData(testdata)
+	archivist.Info(" - - - - - - - - - Test optional first level join  - - - - - - - - -")
+	qry := query.New().Read("Person").CanTo(
+		query.New().Read("Shipping"),
+	)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testRequiredQueryJoinFirstLevelSuccess() {
+	testdata := testQbStructureMap()
+	gits.MapTransportData(testdata)
+	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	qry := query.New().Read("Person").To(
+		query.New().Read("Marketplace"),
+	)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testRequiredQueryJoinFirstLevelFail() {
+	testdata := testQbStructureMap()
+	gits.MapTransportData(testdata)
+	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	qry := query.New().Read("Person").To(
+		query.New().Read("Shipping"),
+	)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testRequiredQueryJoinInDepthFail() {
+	testdata := testQbStructureMap()
+	gits.MapTransportData(testdata)
+	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	qry := query.New().Read("Person").To(
+		query.New().Read("Marketplace").To(
+			query.New().Read("Person"),
+		),
+	)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testRequiredQueryJoinInDepthSuccess() {
+	testdata := testQbStructureMap()
+	gits.MapTransportData(testdata)
+	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	qry := query.New().Read("Person").To(
+		query.New().Read("Marketplace").To(
+			query.New().Read("Country"),
+		),
+	)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
 func printData(data any) {
 	t, _ := json.MarshalIndent(data, "", "\t")
 	archivist.Info("Query Data Struct", string(t))
+}
+
+func testQbStructureMap() transport.TransportEntity {
+	archivist.Info("Print testdata")
+	// create testdata
+	testdata := transport.TransportEntity{
+		ID:    -1,
+		Type:  "Person",
+		Value: "Max Mustermann",
+		ChildRelations: []transport.TransportRelation{
+			{
+				Context: "Implemented",
+				Target: transport.TransportEntity{
+					ID:         -1,
+					Type:       "Marketplace",
+					Value:      "Gabor",
+					Properties: map[string]string{"IsAbstract": "false"},
+					ChildRelations: []transport.TransportRelation{
+						{
+							Context: "ShipsTo",
+							Target: transport.TransportEntity{
+								ID:    -1,
+								Type:  "Country",
+								Value: "Germany",
+							},
+						}, {
+							Context: "ShipsTo",
+							Target: transport.TransportEntity{
+								ID:    -1,
+								Type:  "Country",
+								Value: "France",
+							},
+						},
+					},
+				},
+			}, {
+				Context: "Implemented",
+				Target: transport.TransportEntity{
+					ID:    -1,
+					Type:  "Marketplace",
+					Value: "Wortmann",
+					ChildRelations: []transport.TransportRelation{
+						{
+							Context: "Defers",
+							Target: transport.TransportEntity{
+								ID:         -1,
+								Type:       "Marketplace",
+								Value:      "Marco Tozzi",
+								Properties: map[string]string{"Golive": "1.1.1001"},
+								ChildRelations: []transport.TransportRelation{
+									{
+										Context: "ShipsTo",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Country",
+											Value: "Germany",
+										},
+									}, {
+										Context: "ShipsTo",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Country",
+											Value: "Austria",
+										},
+									},
+								},
+							},
+						}, {
+							Context: "Defers",
+							Target: transport.TransportEntity{
+								ID:         -1,
+								Type:       "Marketplace",
+								Value:      "Tamaris",
+								Properties: map[string]string{"Golive": "1.1.2001"},
+								ChildRelations: []transport.TransportRelation{
+									{
+										Context: "ShipsTo",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Country",
+											Value: "Germany",
+										},
+									}, {
+										Context: "ShipsTo",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Country",
+											Value: "Austria",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	printData(testdata)
+	return testdata
 }

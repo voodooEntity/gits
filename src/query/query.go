@@ -267,7 +267,7 @@ func Execute(query *Query) transport.Transport {
 				}
 
 				// are there any results?
-				if 0 < amount {
+				if 0 < amount || !query.HasRequiredSubQueries() {
 					ret.Amount++
 					// do we have any data to add? (and it is a read)
 					if METHOD_READ == query.Method {
@@ -389,7 +389,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 				if 0 < len(parents) {
 					resultData[key].Target.ParentRelations = append(resultData[key].Target.ParentRelations, children...)
 				}
-				if 0 < amount {
+				if 0 < amount || !query.HasRequiredSubQueries() {
 					tmpRet = append(tmpRet, resultData[key])
 					i++
 				}
@@ -454,6 +454,15 @@ func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
 		}
 	}
 	return baseMatchList, propertyMatchList
+}
+
+func (self *Query) HasRequiredSubQueries() bool {
+	for _, qry := range self.Map {
+		if true == qry.Required {
+			return true
+		}
+	}
+	return false
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -

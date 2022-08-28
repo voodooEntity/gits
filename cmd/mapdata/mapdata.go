@@ -13,8 +13,9 @@ func main() {
 
 	//testNewMappedStructure()
 	//testNewMappedStructureWithExistingEntity()
-	testNewMappedStructureWithExistingMappedStructureEntity()
-
+	//testNewMappedStructureWithExistingMappedStructureEntity()
+	//testBigStrucutreMap()
+	//testQbStructureMap()
 }
 
 func testNewMappedStructure() {
@@ -175,6 +176,184 @@ func testNewMappedStructureWithExistingMappedStructureEntity() {
 	)
 	ret := query.Execute(search)
 	printData(ret)
+}
+
+func testBigStrucutreMap() {
+	archivist.Info("Print testdata")
+	// create testdata
+	testdata := transport.TransportEntity{
+		ID:    -1,
+		Type:  "IP",
+		Value: "127.0.0.1",
+		ChildRelations: []transport.TransportRelation{
+			{
+				Context: "",
+				Target: transport.TransportEntity{
+					ID:    -1,
+					Type:  "Port",
+					Value: "80",
+					ChildRelations: []transport.TransportRelation{
+						{
+							Context: "Else",
+							Target: transport.TransportEntity{
+								ID:         -1,
+								Type:       "Software",
+								Value:      "Apache",
+								Properties: map[string]string{"Version": "2.4.6"},
+							},
+						},
+					},
+				},
+			}, {
+				Context: "",
+				Target: transport.TransportEntity{
+					ID:    -1,
+					Type:  "Port",
+					Value: "443",
+					ChildRelations: []transport.TransportRelation{
+						{
+							Context: "Else",
+							Target: transport.TransportEntity{
+								ID:         -1,
+								Type:       "Software",
+								Value:      "Apache",
+								Properties: map[string]string{"Version": "2.4.6"},
+								ChildRelations: []transport.TransportRelation{
+									{
+										Context: "Else",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Vhost",
+											Value: "laughingman.dev",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}, {
+				Context: "",
+				Target: transport.TransportEntity{
+					ID:    -1,
+					Type:  "Port",
+					Value: "8090",
+					ChildRelations: []transport.TransportRelation{
+						{
+							Context: "Else",
+							Target: transport.TransportEntity{
+								ID:         -1,
+								Type:       "Software",
+								Value:      "gitsapi",
+								Properties: map[string]string{"Version": "0.0.9"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	printData(testdata)
+}
+
+func testQbStructureMap() transport.TransportEntity {
+	archivist.Info("Print testdata")
+	// create testdata
+	testdata := transport.TransportEntity{
+		ID:    -1,
+		Type:  "Person",
+		Value: "Max Mustermann",
+		ChildRelations: []transport.TransportRelation{
+			{
+				Context: "Implemented",
+				Target: transport.TransportEntity{
+					ID:         -1,
+					Type:       "Marketplace",
+					Value:      "Gabor",
+					Properties: map[string]string{"IsAbstract": "false"},
+					ChildRelations: []transport.TransportRelation{
+						{
+							Context: "ShipsTo",
+							Target: transport.TransportEntity{
+								ID:    -1,
+								Type:  "Country",
+								Value: "Germany",
+							},
+						}, {
+							Context: "ShipsTo",
+							Target: transport.TransportEntity{
+								ID:    -1,
+								Type:  "Country",
+								Value: "France",
+							},
+						},
+					},
+				},
+			}, {
+				Context: "Implemented",
+				Target: transport.TransportEntity{
+					ID:    -1,
+					Type:  "Marketplace",
+					Value: "Wortmann",
+					ChildRelations: []transport.TransportRelation{
+						{
+							Context: "Defers",
+							Target: transport.TransportEntity{
+								ID:         -1,
+								Type:       "Marketplace",
+								Value:      "Marco Tozzi",
+								Properties: map[string]string{"Golive": "1.1.1001"},
+								ChildRelations: []transport.TransportRelation{
+									{
+										Context: "ShipsTo",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Country",
+											Value: "Germany",
+										},
+									}, {
+										Context: "ShipsTo",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Country",
+											Value: "Austria",
+										},
+									},
+								},
+							},
+						}, {
+							Context: "Defers",
+							Target: transport.TransportEntity{
+								ID:         -1,
+								Type:       "Marketplace",
+								Value:      "Tamaris",
+								Properties: map[string]string{"Golive": "1.1.2001"},
+								ChildRelations: []transport.TransportRelation{
+									{
+										Context: "ShipsTo",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Country",
+											Value: "Germany",
+										},
+									}, {
+										Context: "ShipsTo",
+										Target: transport.TransportEntity{
+											ID:    -1,
+											Type:  "Country",
+											Value: "Austria",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	printData(testdata)
+	return testdata
 }
 
 func printData(data any) {
