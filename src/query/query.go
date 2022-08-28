@@ -1,10 +1,11 @@
 package query
 
 import (
+	"strings"
+
 	"github.com/voodooEntity/gits"
 	"github.com/voodooEntity/gits/src/mutexhandler"
 	"github.com/voodooEntity/gits/src/transport"
-	"strings"
 )
 
 const (
@@ -359,8 +360,15 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 
 		// get data from subquery
 		resultData, resultAddresses, amount := gits.GetEntitiesByQueryFilterAndSourceAddress(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, sourceAddress, query.Direction, returnDataFlag)
-		// if we got no returns we continue
+
+		// if we got no returns
 		if 0 == amount {
+			// we check if there had to be some
+			if true == query.Required {
+				// empty return since we got no hits on a required subquery
+				return []transport.TransportRelation{}, []transport.TransportRelation{}, [][4]int{}, 0
+			}
+			// if not we just continue
 			continue
 		}
 		// since we got data we gonne get recursive from here
