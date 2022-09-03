@@ -1,6 +1,9 @@
 package query
 
 import (
+	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/voodooEntity/gits"
@@ -32,6 +35,13 @@ const (
 	METHOD_FIND   = 9
 )
 
+const (
+	ORDER_DIRECTION_ASC  = 1
+	ORDER_DIRECTION_DESC = 2
+	ORDER_MODE_NUM       = 1
+	ORDER_MODE_ALPHA     = 2
+)
+
 type Query struct {
 	Method             int
 	Pool               []string
@@ -40,8 +50,15 @@ type Query struct {
 	Mode               [][]string
 	Values             map[string]string
 	currConditionGroup int
+	Sort               Order
 	Direction          int
 	Required           bool
+}
+
+type Order struct {
+	Direction int
+	Mode      int
+	Field     string
 }
 
 func New() *Query {
@@ -183,8 +200,17 @@ func (self *Query) Set(key string, value string) *Query {
 	return self
 }
 
+func (self *Query) Order(field string, direction int, mode int) *Query {
+	self.Sort = Order{
+		Direction: direction,
+		Mode:      mode,
+		Field:     field,
+	}
+	return self
+}
+
 func Execute(query *Query) transport.Transport {
-	// if there are no filters something must be terribly wrong ### review this since we may have update/delete/create actions without filters
+	// no type pool = something is very wrong
 	if 0 == len(query.Pool) {
 		return transport.Transport{}
 	}
@@ -205,7 +231,6 @@ func Execute(query *Query) transport.Transport {
 	}
 
 	// do we have any potential joins? if yes we need to read lock the relation storage
-	// ### maybe add lock for link() method later
 	if 0 < len(query.Map) {
 		// if its link method or unlink method we need to write lock the relation storage
 		if METHOD_LINK == query.Method || METHOD_UNLINK == query.Method {
@@ -217,8 +242,8 @@ func Execute(query *Query) transport.Transport {
 
 	// some dispatches for special query variables
 	// do we need to return the data itself?
-	returnDataFlag := false
 	var addressPairs [][4]int
+	returnDataFlag := false
 	linked := true
 	linkAddresses := [2][][2]int{}
 	linkAmount := 0
@@ -234,7 +259,6 @@ func Execute(query *Query) transport.Transport {
 	baseMatchList, propertyMatchList := parseConditions(query)
 
 	// now we need to fetch the list of entities fitting to our filters
-	//var addressList [][2]int
 	resultData, resultAddresses, amount := gits.GetEntitiesByQueryFilter(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, returnDataFlag)
 
 	// prepare transport data
@@ -294,20 +318,14 @@ func Execute(query *Query) transport.Transport {
 	if 0 < ret.Amount {
 		// now we need to dispatch based on method what we gonne do
 		switch query.Method {
-		case METHOD_READ:
-			mutexh.Release()
-			return ret
 		case METHOD_UPDATE:
 			// if we got any results and values to update given fire Batch update
 			if 0 < len(query.Values) {
 				gits.BatchUpdateAddressList(resultAddresses, query.Values)
 			}
 			mutexh.Release()
-			return ret
 		case METHOD_DELETE:
 			gits.BatchDeleteAddressList(resultAddresses)
-			mutexh.Release()
-			return ret
 		case METHOD_LINK:
 			affectedAmount := 0
 			if 0 < linkAmount {
@@ -322,8 +340,6 @@ func Execute(query *Query) transport.Transport {
 				}
 			}
 			ret.Amount = affectedAmount
-			mutexh.Release()
-			return ret
 		case METHOD_UNLINK:
 			affectedAmount := 0
 			if 0 < len(addressPairs) {
@@ -333,9 +349,14 @@ func Execute(query *Query) transport.Transport {
 				}
 			}
 			ret.Amount = affectedAmount
-			mutexh.Release()
-			return ret
 		}
+		if (Order{}) != query.Sort {
+			fmt.Println("yes we are sorting")
+			ret.Entities = sortResults(ret.Entities, query.Sort.Field, query.Sort.Direction, query.Sort.Mode)
+		}
+		//sortResults
+		mutexh.Release()
+		return ret
 	}
 
 	// if there were no results we still need to unlock all the mutex
@@ -454,6 +475,40 @@ func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
 		}
 	}
 	return baseMatchList, propertyMatchList
+}
+
+func sortResults(results []transport.TransportEntity, field string, direction int, mode int) []transport.TransportEntity {
+	cl := func(i, j int) bool {
+		// get the values
+		sAlpha := results[i].GetFieldByString(field)
+		sBeta := results[j].GetFieldByString(field)
+
+		// if mode is numeric we need to int cast the values
+		if ORDER_MODE_NUM == mode {
+			iAlpha, erra := strconv.ParseInt(sAlpha, 10, 64)
+			iBeta, errb := strconv.ParseInt(sBeta, 10, 64)
+			if nil == erra && nil == errb {
+				if ORDER_DIRECTION_ASC == direction && iAlpha < iBeta || ORDER_DIRECTION_DESC == direction && iAlpha > iBeta {
+					return true
+				}
+			}
+		} else { // alphabetical search
+			sLowerAlpha := strings.ToLower(sAlpha)
+			sLowerBeta := strings.ToLower(sBeta)
+			if sLowerAlpha == sLowerBeta {
+				if ORDER_DIRECTION_ASC == direction && sAlpha < sBeta || ORDER_DIRECTION_DESC == direction && sAlpha > sBeta {
+					return true
+				}
+			} else {
+				if ORDER_DIRECTION_ASC == direction && sLowerAlpha < sLowerBeta || ORDER_DIRECTION_DESC == direction && sLowerAlpha > sLowerBeta {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	sort.Slice(results, cl)
+	return results
 }
 
 func (self *Query) HasRequiredSubQueries() bool {

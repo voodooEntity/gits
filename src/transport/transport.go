@@ -1,5 +1,7 @@
 package transport
 
+import "strings"
+
 type Transport struct {
 	Entities  []TransportEntity
 	Relations []TransportRelation
@@ -46,4 +48,26 @@ func (self *TransportEntity) Parents() []TransportEntity {
 		ret = append(ret, resultRelation.Target)
 	}
 	return ret
+}
+
+func (self *TransportEntity) GetFieldByString(field string) string {
+	switch field {
+	case "ID":
+		return string(self.ID)
+	case "Context":
+		return self.Context
+	case "Value":
+		return self.Value
+	default:
+		if -1 != strings.Index(field, "Properties") {
+			// ### we need to prepare the map here if it doesn't exist
+			property := field[11:]
+			if nil != self.Properties {
+				if val, ok := self.Properties[property]; ok {
+					return val
+				}
+			}
+		}
+	}
+	return ""
 }

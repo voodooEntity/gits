@@ -52,7 +52,11 @@ func main() {
 	//testRequiredQueryJoinFirstLevelFail()
 	//testRequiredQueryJoinInDepthFail()
 	//testRequiredQueryJoinInDepthSuccess()
-	testRequiredAndOptionalMixed()
+	//testRequiredAndOptionalMixed()
+	//testOrderByNumericValueAsc()
+	//testOrderByNumericValueDesc()
+	//testOrderByAlphabeticalValueAsc()
+	testOrderByAlphabeticalValueDesc()
 	fmt.Println("Time took ", time.Since(start))
 }
 
@@ -698,4 +702,69 @@ func testQbStructureMap() transport.TransportEntity {
 	}
 	printData(testdata)
 	return testdata
+}
+
+func createTestDataForOrderByValueNumeric() {
+	gits.MapTransportData(transport.TransportEntity{
+		ID:    -1,
+		Type:  "Something",
+		Value: "2",
+	})
+	gits.MapTransportData(transport.TransportEntity{
+		ID:    -1,
+		Type:  "Something",
+		Value: "333",
+	})
+	gits.MapTransportData(transport.TransportEntity{
+		ID:    -1,
+		Type:  "Something",
+		Value: "1",
+	})
+}
+
+func createTestDataOrderAlphabetical() {
+	gits.MapTransportData(transport.TransportEntity{
+		ID:    -1,
+		Type:  "Something",
+		Value: "Das",
+	})
+	gits.MapTransportData(transport.TransportEntity{
+		ID:    -1,
+		Type:  "Something",
+		Value: "Zebra",
+	})
+	gits.MapTransportData(transport.TransportEntity{
+		ID:    -1,
+		Type:  "Something",
+		Value: "auch",
+	})
+}
+
+func testOrderByNumericValueAsc() {
+	createTestDataForOrderByValueNumeric()
+	qry := query.New().Read("Something").Order("Value", query.ORDER_DIRECTION_ASC, query.ORDER_MODE_NUM)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testOrderByNumericValueDesc() {
+	createTestDataForOrderByValueNumeric()
+	qry := query.New().Read("Something").Order("Value", query.ORDER_DIRECTION_DESC, query.ORDER_MODE_NUM)
+	ret := query.Execute(qry)
+	fmt.Printf("%+v", ret)
+	printData(ret)
+}
+
+func testOrderByAlphabeticalValueAsc() {
+	createTestDataOrderAlphabetical()
+	qry := query.New().Read("Something").Order("Value", query.ORDER_DIRECTION_ASC, query.ORDER_MODE_ALPHA)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testOrderByAlphabeticalValueDesc() {
+	createTestDataOrderAlphabetical()
+	qry := query.New().Read("Something").Order("Value", query.ORDER_DIRECTION_DESC, query.ORDER_MODE_ALPHA)
+	ret := query.Execute(qry)
+	printData(ret)
 }
