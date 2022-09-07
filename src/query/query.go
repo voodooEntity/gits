@@ -529,7 +529,6 @@ Methods:
 -> DELETE   [x]
 -> LINK     [X]
 -> UNLINK   [X]
--> COUNT    [ ]
 
 
 Filter:
@@ -552,11 +551,9 @@ Compare Operators:
 
 
 AFTERPROCESSING:
--> ORDER BY % ASC/DESC  [ ]
--> CONSOLIDATE_RESULTS  [ ]
+-> ORDER BY % ASC/DESC  [X]
 
 SPECIAL:
--> LIMIT       [ ]
 -> TRAVERSE    [ ]
 -> RTRAVERSE   [ ]
 */
