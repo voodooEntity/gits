@@ -53,10 +53,13 @@ func main() {
 	//testRequiredQueryJoinInDepthFail()
 	//testRequiredQueryJoinInDepthSuccess()
 	//testRequiredAndOptionalMixed()
+
+	// order by
 	//testOrderByNumericValueAsc()
 	//testOrderByNumericValueDesc()
 	//testOrderByAlphabeticalValueAsc()
 	testOrderByAlphabeticalValueDesc()
+
 	fmt.Println("Time took ", time.Since(start))
 }
 
