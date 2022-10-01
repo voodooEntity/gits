@@ -1741,27 +1741,27 @@ func GetTypeIdByStringUnsafe(strType string) (int, error) {
 	return -1, errors.New("Entity Type string does not exist")
 }
 
-func GetTypeStringById(intType int) (*string, error) {
+func GetTypeStringById(intType int) (string, error) {
 	EntityTypeMutex.RLock()
 	// lets check if this Type exists
 	if strType, ok := EntityTypes[intType]; ok {
 		// it does lets return it
 		EntityTypeMutex.RUnlock()
-		return &strType, nil
+		return strType, nil
 	}
 
 	EntityTypeMutex.RUnlock()
-	return nil, errors.New("Entity Type string does not exist")
+	return "", errors.New("Entity Type ID does not exist")
 }
 
-func GetTypeStringByIdUnsafe(intType int) (*string, error) {
+func GetTypeStringByIdUnsafe(intType int) (string, error) {
 	// lets check if this Type exists
 	if strType, ok := EntityTypes[intType]; ok {
 		// it does lets return it
-		return &strType, nil
+		return strType, nil
 	}
 
-	return nil, errors.New("Entity Type string does not exist")
+	return "", errors.New("Entity Type ID does not exist")
 }
 
 func GetAmountPersistencePayloadsPending() int {
