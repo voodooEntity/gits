@@ -1841,6 +1841,27 @@ func mapRecursive(entity transport.TransportEntity, relatedType int, relatedID i
 		}
 		// now we create the entity
 		mapID, _ = CreateEntityUnsafe(tmpEntity)
+	} else if 0 == entity.ID {
+		// if entity.ID == 0 its an upsert by Value and Context(if given)
+		entities, err := GetEntitiesByTypeAndValue(entity.Type, entity.Value, "match", entity.Context)
+
+		// if we got an error or no entities returned we gonne create the entity like in ID==0 case | ###todo refactor if this could somehow be done nicer / merged with the case before
+		if nil != err || 0 == len(entities) {
+			tmpEntity := types.StorageEntity{
+				ID:         -1,
+				Type:       TypeID,
+				Value:      entity.Value,
+				Context:    entity.Context,
+				Version:    1,
+				Properties: entity.Properties,
+			}
+			// now we create the entity
+			mapID, _ = CreateEntityUnsafe(tmpEntity)
+		} else {
+			// we gonne take ID of the first entry of the return entities map
+			mapID = entities[0].ID
+		}
+
 	} else {
 		// it seems we got an already existing entity given so we use this id to map
 		mapID = entity.ID
