@@ -27,6 +27,7 @@ type TransportRelation struct {
 	SourceID   int
 	TargetType string
 	TargetID   int
+	Version    int
 }
 
 func New() *Transport {
