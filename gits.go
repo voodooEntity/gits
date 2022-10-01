@@ -1595,14 +1595,14 @@ func GetParentRelationsByTargetTypeAndTargetIdUnsafe(targetType int, targetID in
 	return mapRet, nil
 }
 
-func GetEntityTypes() []string {
+func GetEntityTypes() map[int]string {
 	// prepare the return array
-	types := []string{}
+	types := make(map[int]string)
 
 	// now we lock the storage
 	EntityTypeMutex.RLock()
-	for _, Type := range EntityTypes {
-		types = append(types, Type)
+	for id, Type := range EntityTypes {
+		types[id] = Type
 	}
 
 	// unlock the mutex and return
@@ -1610,13 +1610,13 @@ func GetEntityTypes() []string {
 	return types
 }
 
-func GetEntityTypesUnsafe() []string {
+func GetEntityTypesUnsafe() map[int]string {
 	// prepare the return array
-	types := []string{}
+	types := make(map[int]string)
 
 	// now we lock the storage
-	for _, Type := range EntityTypes {
-		types = append(types, Type)
+	for id, Type := range EntityTypes {
+		types[id] = Type
 	}
 
 	// unlock the mutex and return
