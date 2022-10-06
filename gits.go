@@ -850,7 +850,7 @@ func GetEntitiesByTypeAndValueUnsafe(Type string, value string, mode string, con
 	var err error = nil
 
 	// retrieve the fitting id
-	entityTypeID, _ := GetTypeIdByString(Type)
+	entityTypeID, _ := GetTypeIdByStringUnsafe(Type)
 
 	// if we got mode regex we prepare the regex
 	// by precompiling it to have faster lookups

@@ -14,7 +14,7 @@ func main() {
 	//testNewMappedStructure()
 	//testNewMappedStructureWithExistingEntity()
 	//testNewMappedStructureWithExistingMappedStructureEntity()
-	//testBigStrucutreMap()
+	testBigStrucutreMap()
 	//testQbStructureMap()
 }
 
@@ -357,6 +357,6 @@ func testQbStructureMap() transport.TransportEntity {
 }
 
 func printData(data any) {
-	t, _ := json.MarshalIndent(data, "", "\t")
+	t, _ := json.MarshalIndent(data, "", "\t")b
 	archivist.Info("Query Data Struct", string(t))
 }
