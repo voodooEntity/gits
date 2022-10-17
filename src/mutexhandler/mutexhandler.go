@@ -1,6 +1,7 @@
 package mutexhandler
 
 import (
+	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits"
 )
 
@@ -23,6 +24,16 @@ func New() *MutexHandler {
 }
 
 func (self *MutexHandler) Apply(muident int) *MutexHandler {
+	// first we check if this is locked already, this should not be neccesary but we running in an issue atm that might be caused due to this ###
+	if 0 < len(self.Applied) {
+		for _, val := range self.Applied {
+			if val == muident {
+				archivist.Debug("Trying to multi-apply same lock in MutexHandler")
+				return self
+			}
+		}
+	}
+
 	// prepare applied flag
 	applied := false
 	// apply mmutex
