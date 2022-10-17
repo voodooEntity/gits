@@ -323,7 +323,6 @@ func Execute(query *Query) transport.Transport {
 			if 0 < len(query.Values) {
 				gits.BatchUpdateAddressList(resultAddresses, query.Values)
 			}
-			mutexh.Release()
 		case METHOD_DELETE:
 			gits.BatchDeleteAddressList(resultAddresses)
 		case METHOD_LINK:

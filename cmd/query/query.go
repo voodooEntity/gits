@@ -37,7 +37,7 @@ func main() {
 	//testFilterValueBySmallerThanMatch()
 	//testFilterPropertyByExcactMatch()
 	//testSimpleReadWithReduce()
-	//testUpdateEntityValue()
+	testUpdateEntityValue()
 	//testDeleteEntityByTypeAndID()
 	//testQueryLinkTo()
 	//testQueryLinkFrom()
@@ -56,7 +56,8 @@ func main() {
 	//testOrderByNumericValueAsc()
 	//testOrderByNumericValueDesc()
 	//testOrderByAlphabeticalValueAsc()
-	testOrderByAlphabeticalValueDesc()
+	//testOrderByAlphabeticalValueDesc()
+	//testSpecificQueryContentCompareJs()
 	fmt.Println("Time took ", time.Since(start))
 }
 
@@ -767,4 +768,9 @@ func testOrderByAlphabeticalValueDesc() {
 	qry := query.New().Read("Something").Order("Value", query.ORDER_DIRECTION_DESC, query.ORDER_MODE_ALPHA)
 	ret := query.Execute(qry)
 	printData(ret)
+}
+
+func testSpecificQueryContentCompareJs() {
+	qry := query.New().Read("Note").Match("Value", "contain", "something").OrMatch("Property.Text", "contain", "something").OrMatch("Property.Date", "contain", "something")
+	printData(qry)
 }
