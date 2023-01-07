@@ -1,7 +1,7 @@
 package query
 
 import (
-	"fmt"
+	"github.com/voodooEntity/archivist"
 	"sort"
 	"strconv"
 	"strings"
@@ -59,6 +59,12 @@ type Order struct {
 	Direction int
 	Mode      int
 	Field     string
+}
+
+type Traverse struct {
+	Direction int
+	Depth     int
+	Source    *transport.TransportEntity
 }
 
 func New() *Query {
@@ -209,6 +215,16 @@ func (self *Query) Order(field string, direction int, mode int) *Query {
 	return self
 }
 
+func (self *Query) TraverseOut(depth int) *Query {
+	self.Mode = append(self.Mode, []string{"Traverse", strconv.Itoa(DIRECTION_CHILD), strconv.Itoa(depth)})
+	return self
+}
+
+func (self *Query) TraverseIn(depth int) *Query {
+	self.Mode = append(self.Mode, []string{"Traverse", strconv.Itoa(DIRECTION_PARENT), strconv.Itoa(depth)})
+	return self
+}
+
 func Execute(query *Query) transport.Transport {
 	// no type pool = something is very wrong
 	if 0 == len(query.Pool) {
@@ -244,6 +260,7 @@ func Execute(query *Query) transport.Transport {
 	// do we need to return the data itself?
 	var addressPairs [][4]int
 	returnDataFlag := false
+	var traverseList []Traverse
 	linked := true
 	linkAddresses := [2][][2]int{}
 	linkAmount := 0
@@ -279,7 +296,7 @@ func Execute(query *Query) transport.Transport {
 		if linked {
 			for key, entityAddress := range resultAddresses {
 				// recursive execute our actions
-				children, parents, tmpAddressPairs, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairs)
+				children, parents, tmpAddressPairs, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairs, resultData[key], &traverseList)
 				// append the current addresspairs since it can be used for unlinking or other funny stuff
 				addressPairs = append(addressPairs, tmpAddressPairs...) // i dont like it but ok for now ### todo overthink
 				// now if given store children and parents entities
@@ -348,12 +365,36 @@ func Execute(query *Query) transport.Transport {
 				}
 			}
 			ret.Amount = affectedAmount
+		case METHOD_READ:
+			// add traverse data for root level entities - only for read
+			if direction, depth, traversed := isTraversed(*query); traversed {
+				for _, el := range ret.Entities {
+					traverseList = append(traverseList, Traverse{
+						Direction: direction,
+						Depth:     depth,
+						Source:    &el,
+					})
+				}
+				archivist.Info("yes root level traverse list", traverseList)
+			}
 		}
+
+		// lets check if we have to traverse, and if yes do it
+		archivist.Info("final traverse list", traverseList)
+		if 0 < len(traverseList) {
+			archivist.Info("Execution of traverse")
+			for _, trav := range traverseList {
+				gits.TraverseEnrich(trav.Source, trav.Direction, trav.Depth)
+			}
+		}
+
+		// do we have to sort?
 		if (Order{}) != query.Sort {
-			fmt.Println("yes we are sorting")
+			archivist.Debug("Sorting got triggert", query.Sort)
 			ret.Entities = sortResults(ret.Entities, query.Sort.Field, query.Sort.Direction, query.Sort.Mode)
 		}
-		//sortResults
+
+		// release all the mutex and provide the data
 		mutexh.Release()
 		return ret
 	}
@@ -363,7 +404,7 @@ func Execute(query *Query) transport.Transport {
 	return transport.Transport{}
 }
 
-func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairList [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
+func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairList [][4]int, e transport.TransportEntity, traverseList *[]Traverse) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
 	var retParents []transport.TransportRelation
 	var retChildren []transport.TransportRelation
 	i := 0
@@ -395,7 +436,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 		if 0 < len(query.Map) {
 			for key, entityAddress := range resultAddresses {
 				// further execute and store data on return
-				children, parents, tmpAddressList, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairList)
+				children, parents, tmpAddressList, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairList, resultData[key].Target, traverseList)
 				if DIRECTION_CHILD == query.Direction {
 					tmpAddressList = append(tmpAddressList, [4]int{sourceAddress[0], sourceAddress[1], entityAddress[0], entityAddress[1]})
 				} else {
@@ -427,6 +468,20 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 			i = amount
 			tmpRet = append(tmpRet, resultData...)
 		}
+		// if its traverse we need to enrich our elements here before
+		// they got addet towarsd the whole return chunk
+		if direction, depth, ok := isTraversed(query); ok {
+			for _, el := range tmpRet {
+				archivist.Info("Yes recursive query traverse append")
+				*traverseList = append(*traverseList, Traverse{
+					Direction: direction,
+					Depth:     depth,
+					Source:    &el.Target,
+				})
+				archivist.Info("Yes recursive query traverse append", *traverseList)
+			}
+		}
+
 		// if we got any results we add them
 		if 0 < len(tmpRet) {
 			// add the results to either child direction list
@@ -519,6 +574,36 @@ func (self *Query) HasRequiredSubQueries() bool {
 	return false
 }
 
+func isTraversed(qry Query) (int, int, bool) {
+	archivist.Info("Calling is traversed")
+	if nil != qry.Mode {
+		for _, mode := range qry.Mode {
+			tmpLen := len(mode)
+			archivist.Info("mode len", tmpLen)
+			if 0 < tmpLen && "Traverse" == mode[0] {
+				archivist.Info("yes its traverse")
+				if 3 == tmpLen {
+					archivist.Info("Yes our len is 3")
+					direction, err := strconv.ParseInt(mode[1], 10, 64)
+					if nil != err {
+						archivist.Info("Invalid traverse direction given. Skipping")
+						return -1, -1, false
+					}
+					depth, err := strconv.ParseInt(mode[2], 10, 64)
+					if nil != err {
+						archivist.Info("Invalid traverse depth given. Skipping")
+						return -1, -1, false
+					}
+
+					archivist.Info("Found traverse opts", direction, depth)
+					return int(direction), int(depth), true
+				}
+			}
+		}
+	}
+	return -1, -1, false
+}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 /**
 Methods:
@@ -554,5 +639,5 @@ AFTERPROCESSING:
 
 SPECIAL:
 -> TRAVERSE    [ ]
--> RTRAVERSE   [ ]
+-> RTRAVEeuRSE   [ ]
 */
