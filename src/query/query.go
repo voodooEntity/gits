@@ -603,8 +603,10 @@ Compare Operators:
 
 AFTERPROCESSING:
 -> ORDER BY % ASC/DESC  [X]
+-> TraverseOut          [X]
+-> TraverseIn           [X]
+-> LIMIT                [ ]
 
-SPECIAL:
--> TRAVERSE    [ ]
--> RTRAVEeuRSE   [ ]
+
+
 */
