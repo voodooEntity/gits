@@ -2200,11 +2200,11 @@ func LinkAddressLists(from [][2]int, to [][2]int) int {
 }
 
 func TraverseEnrich(entity *transport.TransportEntity, direction int, depth int) {
-	depth--
 	if 1 > depth {
 		// we reached max depth nuttin to do here
 		return
 	}
+	depth--
 
 	// retrive entity type map for further lookups
 	entityTypeMap := GetEntityTypesUnsafe()
@@ -2219,21 +2219,20 @@ func TraverseEnrich(entity *transport.TransportEntity, direction int, depth int)
 	// collect adresses we know and we want to hit
 	knownEntities := make(map[string]int)
 	var related map[int]types.StorageRelation
-	iterator := []transport.TransportRelation{}
+	var iterator *[]transport.TransportRelation
 	if DIRECTION_CHILD == direction {
-		iterator = entity.ChildRelations
+		iterator = &(entity.ChildRelations)
 		related, _ = GetChildRelationsBySourceTypeAndSourceIdUnsafe(currEntityTypeId, entity.ID, "")
 	} else {
-		iterator = entity.ParentRelations
+		iterator = &(entity.ParentRelations)
 		related, _ = GetParentRelationsByTargetTypeAndTargetIdUnsafe(currEntityTypeId, entity.ID, "")
 	}
-	if 0 < len(iterator) {
-		for id, val := range iterator {
+	if 0 < len(*iterator) {
+		for id, val := range *iterator {
 			address := val.TargetType + ":" + strconv.Itoa(val.Target.ID)
 			knownEntities[address] = id
 		}
 	}
-	archivist.Info("known list", knownEntities)
 	// now we go through all related datasets
 	for _, rel := range related {
 		// build the address to check if we already know it
@@ -2258,42 +2257,19 @@ func TraverseEnrich(entity *transport.TransportEntity, direction int, depth int)
 			// there would be a major inconsistency in the storage itself ###todo review
 			newEntity, _ := GetEntityByPathUnsafe(relType, relID, "")
 
-			var iteratorIndex int
-			if DIRECTION_CHILD == direction {
-				entity.ChildRelations = append(entity.ChildRelations, transport.TransportRelation{
-					Target: transport.TransportEntity{
-						Type:       entityTypeMap[newEntity.Type],
-						ID:         newEntity.ID,
-						Value:      newEntity.Value,
-						Context:    newEntity.Context,
-						Version:    newEntity.Version,
-						Properties: newEntity.Properties,
-					},
-				})
-				archivist.Info("yes we append it", entity.ChildRelations)
-				iteratorIndex = len(entity.ChildRelations) - 1
-				archivist.Info("Iterator index is", iteratorIndex)
-			} else {
-				archivist.Info("yes we get here wtf")
-				iterator = append(iterator, transport.TransportRelation{
-					Target: transport.TransportEntity{
-						Type:       entityTypeMap[newEntity.Type],
-						ID:         newEntity.ID,
-						Value:      newEntity.Value,
-						Context:    newEntity.Context,
-						Version:    newEntity.Version,
-						Properties: newEntity.Properties,
-					},
-				})
-				iteratorIndex = len(iterator) - 1
-			}
-
+			*iterator = append(*iterator, transport.TransportRelation{
+				Target: transport.TransportEntity{
+					Type:       entityTypeMap[newEntity.Type],
+					ID:         newEntity.ID,
+					Value:      newEntity.Value,
+					Context:    newEntity.Context,
+					Version:    newEntity.Version,
+					Properties: newEntity.Properties,
+				},
+			})
+			iteratorIndex = len(*iterator) - 1
 		}
-		archivist.Info("Traverse rekursion")
-		archivist.Info("child relations", entity.ChildRelations)
-		archivist.Info("iterator", iterator)
-		archivist.Info("iterator index", iteratorIndex)
-		TraverseEnrich(&((*entity).ChildRelations[iteratorIndex]).Target, direction, depth)
+		TraverseEnrich(&((*iterator)[iteratorIndex].Target), direction, depth)
 	}
 }
 
