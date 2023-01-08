@@ -61,12 +61,6 @@ type Order struct {
 	Field     string
 }
 
-type Traverse struct {
-	Direction int
-	Depth     int
-	Source    *transport.TransportEntity
-}
-
 func New() *Query {
 	tmp := Query{
 		Conditions:         [][][3]string{},
@@ -471,29 +465,8 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 					gits.TraverseEnrich(&((*appender)[i].Target), direction, depth)
 				}
 			}
-
-			// -------------------
-			// ### keep this for now since its the alternative to the absolute dynamic variant ontop
-			if false {
-				// add the results to either child direction list
-				if DIRECTION_CHILD == query.Direction {
-					retChildrenLen := len(retChildren)
-					retChildren = append(retChildren, tmpRet...)
-					if len(retChildren) > retChildrenLen {
-						if direction, depth, ok := isTraversed(query); ok {
-							for i := retChildrenLen; i < retChildrenLen+len(tmpRet); i++ {
-								gits.TraverseEnrich(&(retChildren[i].Target), direction, depth)
-							}
-						}
-					}
-				} else {
-					// or we assume its DIRECTION_PARENT if not child
-					retParents = append(retParents, tmpRet...)
-				}
-			}
-			// -------------------
-
 		}
+
 	}
 	return retChildren, retParents, addressPairList, i
 }
