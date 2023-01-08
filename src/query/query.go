@@ -1,7 +1,6 @@
 package query
 
 import (
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -209,6 +208,16 @@ func (self *Query) Order(field string, direction int, mode int) *Query {
 	return self
 }
 
+func (self *Query) TraverseOut(depth int) *Query {
+	self.Mode = append(self.Mode, []string{"Traverse", strconv.Itoa(DIRECTION_CHILD), strconv.Itoa(depth)})
+	return self
+}
+
+func (self *Query) TraverseIn(depth int) *Query {
+	self.Mode = append(self.Mode, []string{"Traverse", strconv.Itoa(DIRECTION_PARENT), strconv.Itoa(depth)})
+	return self
+}
+
 func Execute(query *Query) transport.Transport {
 	// no type pool = something is very wrong
 	if 0 == len(query.Pool) {
@@ -348,12 +357,21 @@ func Execute(query *Query) transport.Transport {
 				}
 			}
 			ret.Amount = affectedAmount
+		case METHOD_READ:
+			// add traverse data for root level entities - only for read
+			if direction, depth, traversed := isTraversed(*query); traversed {
+				for id, _ := range ret.Entities {
+					gits.TraverseEnrich(&(ret.Entities[id]), direction, depth)
+				}
+			}
 		}
+
+		// do we have to sort?
 		if (Order{}) != query.Sort {
-			fmt.Println("yes we are sorting")
 			ret.Entities = sortResults(ret.Entities, query.Sort.Field, query.Sort.Direction, query.Sort.Mode)
 		}
-		//sortResults
+
+		// release all the mutex and provide the data
 		mutexh.Release()
 		return ret
 	}
@@ -427,16 +445,25 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 			i = amount
 			tmpRet = append(tmpRet, resultData...)
 		}
+
 		// if we got any results we add them
-		if 0 < len(tmpRet) {
-			// add the results to either child direction list
+		tmpRetLen := len(tmpRet)
+		if 0 < tmpRetLen {
+			var appender *[]transport.TransportRelation
 			if DIRECTION_CHILD == query.Direction {
-				retChildren = append(retChildren, tmpRet...)
+				appender = &retChildren
 			} else {
-				// or we assume its DIRECTION_PARENT if not child
-				retParents = append(retParents, tmpRet...)
+				appender = &retParents
+			}
+			start := len(*appender)
+			*appender = append(*appender, tmpRet...)
+			if direction, depth, ok := isTraversed(query); ok {
+				for i := start; i < start+tmpRetLen; i++ {
+					gits.TraverseEnrich(&((*appender)[i].Target), direction, depth)
+				}
 			}
 		}
+
 	}
 	return retChildren, retParents, addressPairList, i
 }
@@ -519,6 +546,31 @@ func (self *Query) HasRequiredSubQueries() bool {
 	return false
 }
 
+func isTraversed(qry Query) (int, int, bool) {
+	if nil != qry.Mode {
+		for _, mode := range qry.Mode {
+			tmpLen := len(mode)
+			if 0 < tmpLen && "Traverse" == mode[0] {
+				if 3 == tmpLen {
+					direction, err := strconv.ParseInt(mode[1], 10, 64)
+					if nil != err {
+						// archivist.Info("Invalid traverse direction given. Skipping") ###todo overthink if false should be err and we return that info somehoow
+						return -1, -1, false
+					}
+					depth, err := strconv.ParseInt(mode[2], 10, 64)
+					if nil != err {
+						// archivist.Info("Invalid traverse depth given. Skipping") ###todo overthink if false should be err and we return that info somehoow
+						return -1, -1, false
+					}
+
+					return int(direction), int(depth), true
+				}
+			}
+		}
+	}
+	return -1, -1, false
+}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 /**
 Methods:
@@ -551,8 +603,10 @@ Compare Operators:
 
 AFTERPROCESSING:
 -> ORDER BY % ASC/DESC  [X]
+-> TraverseOut          [X]
+-> TraverseIn           [X]
+-> LIMIT                [ ]
 
-SPECIAL:
--> TRAVERSE    [ ]
--> RTRAVERSE   [ ]
+
+
 */

@@ -2199,6 +2199,80 @@ func LinkAddressLists(from [][2]int, to [][2]int) int {
 	return linkedAmount
 }
 
+func TraverseEnrich(entity *transport.TransportEntity, direction int, depth int) {
+	if 1 > depth {
+		// we reached max depth nuttin to do here
+		return
+	}
+	depth--
+
+	// retrive entity type map for further lookups
+	entityTypeMap := GetEntityTypesUnsafe()
+	currEntityTypeId, err := GetTypeIdByStringUnsafe(entity.Type)
+	if nil != err {
+		// source type entity type does not exist , can this even ever occure? Oo i dont know
+		// trying to solve this error that should die alot earlier but just to be sure ###todo review
+		archivist.Error("This should be impossible to hit - run you fools")
+		return
+	}
+
+	// collect adresses we know and we want to hit
+	knownEntities := make(map[string]int)
+	var related map[int]types.StorageRelation
+	var iterator *[]transport.TransportRelation
+	if DIRECTION_CHILD == direction {
+		iterator = &(entity.ChildRelations)
+		related, _ = GetChildRelationsBySourceTypeAndSourceIdUnsafe(currEntityTypeId, entity.ID, "")
+	} else {
+		iterator = &(entity.ParentRelations)
+		related, _ = GetParentRelationsByTargetTypeAndTargetIdUnsafe(currEntityTypeId, entity.ID, "")
+	}
+	if 0 < len(*iterator) {
+		for id, val := range *iterator {
+			address := val.TargetType + ":" + strconv.Itoa(val.Target.ID)
+			knownEntities[address] = id
+		}
+	}
+	// now we go through all related datasets
+	for _, rel := range related {
+		// build the address to check if we already know it
+		var relType int
+		var relID int
+		if DIRECTION_CHILD == direction {
+			relType = rel.TargetType
+			relID = rel.TargetID
+		} else {
+			relType = rel.SourceType
+			relID = rel.SourceID
+		}
+
+		var iteratorIndex int
+		if id, ok := knownEntities[entityTypeMap[relType]+":"+strconv.Itoa(relID)]; ok {
+			// its an already known element
+			iteratorIndex = id
+		} else {
+			// we ignore the error since it should be tecnicly impossible to occure.
+			// we a re moving in a full locked storage and try to access an entity
+			// whos address we just got from the storage. if this error would occure
+			// there would be a major inconsistency in the storage itself ###todo review
+			newEntity, _ := GetEntityByPathUnsafe(relType, relID, "")
+
+			*iterator = append(*iterator, transport.TransportRelation{
+				Target: transport.TransportEntity{
+					Type:       entityTypeMap[newEntity.Type],
+					ID:         newEntity.ID,
+					Value:      newEntity.Value,
+					Context:    newEntity.Context,
+					Version:    newEntity.Version,
+					Properties: newEntity.Properties,
+				},
+			})
+			iteratorIndex = len(*iterator) - 1
+		}
+		TraverseEnrich(&((*iterator)[iteratorIndex].Target), direction, depth)
+	}
+}
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 // + + + + + + + + + +  PRIVATE  + + + + + + + + + + +
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
