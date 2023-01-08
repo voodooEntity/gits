@@ -1,7 +1,6 @@
 package query
 
 import (
-	"github.com/voodooEntity/archivist"
 	"sort"
 	"strconv"
 	"strings"
@@ -363,14 +362,12 @@ func Execute(query *Query) transport.Transport {
 			if direction, depth, traversed := isTraversed(*query); traversed {
 				for id, _ := range ret.Entities {
 					gits.TraverseEnrich(&(ret.Entities[id]), direction, depth)
-					archivist.Debug("asd", &(ret.Entities[id]), direction, depth)
 				}
 			}
 		}
 
 		// do we have to sort?
 		if (Order{}) != query.Sort {
-			archivist.Debug("Sorting got triggert", query.Sort)
 			ret.Entities = sortResults(ret.Entities, query.Sort.Field, query.Sort.Direction, query.Sort.Mode)
 		}
 
@@ -550,27 +547,22 @@ func (self *Query) HasRequiredSubQueries() bool {
 }
 
 func isTraversed(qry Query) (int, int, bool) {
-	archivist.Info("Calling is traversed")
 	if nil != qry.Mode {
 		for _, mode := range qry.Mode {
 			tmpLen := len(mode)
-			archivist.Info("mode len", tmpLen)
 			if 0 < tmpLen && "Traverse" == mode[0] {
-				archivist.Info("yes its traverse")
 				if 3 == tmpLen {
-					archivist.Info("Yes our len is 3")
 					direction, err := strconv.ParseInt(mode[1], 10, 64)
 					if nil != err {
-						archivist.Info("Invalid traverse direction given. Skipping")
+						// archivist.Info("Invalid traverse direction given. Skipping") ###todo overthink if false should be err and we return that info somehoow
 						return -1, -1, false
 					}
 					depth, err := strconv.ParseInt(mode[2], 10, 64)
 					if nil != err {
-						archivist.Info("Invalid traverse depth given. Skipping")
+						// archivist.Info("Invalid traverse depth given. Skipping") ###todo overthink if false should be err and we return that info somehoow
 						return -1, -1, false
 					}
 
-					archivist.Info("Found traverse opts", direction, depth)
 					return int(direction), int(depth), true
 				}
 			}
