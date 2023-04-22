@@ -357,6 +357,6 @@ func testQbStructureMap() transport.TransportEntity {
 }
 
 func printData(data any) {
-	t, _ := json.MarshalIndent(data, "", "\t")b
+	t, _ := json.MarshalIndent(data, "", "\t")
 	archivist.Info("Query Data Struct", string(t))
 }
