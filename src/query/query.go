@@ -425,7 +425,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 					resultData[key].Target.ChildRelations = append(resultData[key].Target.ChildRelations, children...)
 				}
 				if 0 < len(parents) {
-					resultData[key].Target.ParentRelations = append(resultData[key].Target.ParentRelations, children...)
+					resultData[key].Target.ParentRelations = append(resultData[key].Target.ParentRelations, parents...)
 				}
 				if 0 < amount || !query.HasRequiredSubQueries() {
 					tmpRet = append(tmpRet, resultData[key])
