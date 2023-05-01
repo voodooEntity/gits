@@ -1881,10 +1881,10 @@ func mapRecursive(entity transport.TransportEntity, relatedType int, relatedID i
 	if len(entity.ParentRelations) != 0 {
 		// there are children lets iteater over
 		// the map
-		for _, childRelation := range entity.ChildRelations {
+		for _, parentRelation := range entity.ParentRelations {
 			// pas the child entity and the parent coords to
 			// create the relation after inserting the entity
-			mapRecursive(childRelation.Target, TypeID, mapID, DIRECTION_PARENT)
+			mapRecursive(parentRelation.Target, TypeID, mapID, DIRECTION_PARENT)
 		}
 	}
 	// now lets check if ourparent Type and id
