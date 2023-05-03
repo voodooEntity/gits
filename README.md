@@ -8,7 +8,7 @@
 - [FAQ]
 - [Links]
 
-## About [About]
+## About
 Welcome to the home of gits - an in-memory graph storage. It's completly written in golang and provides access by using included custom query package or by directly accessing the storage. 
 
 The main target of the storage is to have a easy to use high performance graph storage. In it's current state the storage is shipped with basic functionality. I will extend the functionality over time based on needs and time.
@@ -24,3 +24,4 @@ I hope you will enjoy the usage of gits and that this will just be the start of 
 
 Sincerely yours,
 voodooEntity aka laughingman
+
