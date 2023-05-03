@@ -52,7 +52,7 @@ The "gits.Init" call will boot the storage and expects an instance of types.Pers
 
 As mentioned in the [about](#about) section the persistence is implemented asynchronous which means that there always is a very small delay between in memory changes and on disk persistence. For more details about the way the persistence works check the [persistence](https://github.com/voodooEntity/gits/###) page.
 
-After initializing the storage all the functions associated to the storage are global accessible to every package importing the gits packages. The storage is implemented fully threadsafe using multiple mutex. Therefor you can safely use this storage in multithreading applications without having to care about concurrency problems.
+After initializing the storage all the functions associated to the storage are global accessible to every package importing the gits packages. The package will provide one stage instance in your application and doesn't provide the ability to instance multiple storages at the same time. The storage is implemented fully thread safe using multiple mutex. Therefor you can safely use this storage in multithreading applications without having to care about concurrency problems.
 
 Now there are two main ways on how to use the storage. Follow the links for detailed information on 
 - Using the custom [query package](https://github.com/voodooEntity/gits/docs/) (recommended for beginners)
