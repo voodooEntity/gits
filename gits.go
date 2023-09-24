@@ -1186,7 +1186,7 @@ func DeleteParentRelations(Type int, id int) error {
 }
 
 func DeleteParentRelationsUnsafe(Type int, id int) error {
-	parentRelations, err := GetParentRelationsByTargetTypeAndTargetId(Type, id, "")
+	parentRelations, err := GetParentRelationsByTargetTypeAndTargetIdUnsafe(Type, id, "")
 	if nil != err {
 		return err
 	}
