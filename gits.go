@@ -1026,9 +1026,9 @@ func DeleteEntityUnsafe(Type int, id int) {
 	delete(EntityStorage[Type], id)
 	// now we delete the relations from and to this entity
 	// first child
-	DeleteChildRelations(Type, id)
+	DeleteChildRelationsUnsafe(Type, id)
 	// than parent
-	DeleteParentRelations(Type, id)
+	DeleteParentRelationsUnsafe(Type, id)
 }
 
 func GetRelation(srcType int, srcID int, targetType int, targetID int) (types.StorageRelation, error) {
