@@ -37,7 +37,10 @@ func main() {
 	//testFilterValueBySmallerThanMatch()
 	//testFilterPropertyByExcactMatch()
 	//testSimpleReadWithReduce()
-	testUpdateEntityValue()
+	//testUpdateEntityValue()
+	// testTraverseOut()
+	buildWebcrawlerFinalQuery()
+	//testTraverseIn()
 	//testDeleteEntityByTypeAndID()
 	//testQueryLinkTo()
 	//testQueryLinkFrom()
@@ -452,6 +455,36 @@ func buildTestQueryJson() {
 			query.New().Read("Software"),
 		),
 	)
+	printData(qry)
+}
+
+func testTraverseIn() {
+	// map the data
+	gits.MapTransportData(testQbStructureMap())
+	//qry := query.New().Read("Country").TraverseIn(2)
+	archivist.Info("yes")
+	qry := query.New().Read("Country").From(query.New().Read("Marketplace").TraverseIn(2))
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func testTraverseOut() {
+	// map the data
+	gits.MapTransportData(testQbStructureMap())
+	//qry := query.New().Read("Person").TraverseOut(3)
+	archivist.Info("yes")
+	//qry := query.New().Read("Person").To(query.New().Read("Marketplace").TraverseOut(2))
+	qry := query.New().Read("Person").To(
+		query.New().Read("Marketplace").TraverseOut(1),
+	).TraverseOut(2)
+	ret := query.Execute(qry)
+	printData(ret)
+}
+
+func buildWebcrawlerFinalQuery() {
+	archivist.Info("yes")
+	//qry := query.New().Read("Person").To(query.New().Read("Marketplace").TraverseOut(2))
+	qry := query.New().Read("Domain").TraverseOut(5)
 	printData(qry)
 }
 

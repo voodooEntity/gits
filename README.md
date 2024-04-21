@@ -1,1 +1,3 @@
-# gits
+# gits | graph in-memory threadsafe storage 
+
+## 
