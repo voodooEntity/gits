@@ -2191,7 +2191,7 @@ func LinkAddressLists(from [][2]int, to [][2]int) int {
 					TargetType: singleTo[0],
 					TargetID:   singleTo[1],
 				})
-				archivist.Info("Creating link from to ", singleFrom[0], singleFrom[1], singleTo[0], singleTo[1])
+				archivist.Debug("Creating link from to ", singleFrom[0], singleFrom[1], singleTo[0], singleTo[1])
 				linkedAmount++
 			}
 		}
