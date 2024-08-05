@@ -2277,18 +2277,20 @@ func TraverseEnrich(entity *transport.TransportEntity, direction int, depth int)
 // + + + + + + + + + +  PRIVATE  + + + + + + + + + + +
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
 func getRelationContextByAddressAndDirection(sourceType int, sourceID int, targetType int, targetID int, direction int) string {
+
 	if 1 == direction {
+		archivist.Info("yes we get here", RelationStorage[sourceType][sourceID][targetType][targetID].Context)
 		return RelationStorage[sourceType][sourceID][targetType][targetID].Context
 	} else {
+		archivist.Info("yes we get here", RelationStorage[targetType][targetID][sourceType][sourceID].Context)
 		return RelationStorage[targetType][targetID][sourceType][sourceID].Context
 	}
 }
 func getRelationPropertiesByAddressAndDirection(sourceType int, sourceID int, targetType int, targetID int, direction int) map[string]string {
-	// relations need to be copied the current way can lead to thread collision ###todo
 	if 1 == direction {
-		return RelationStorage[sourceType][sourceID][targetType][targetID].Properties
+		return copyPropertiesMap(RelationStorage[sourceType][sourceID][targetType][targetID].Properties)
 	} else {
-		return RelationStorage[targetType][targetID][sourceType][sourceID].Properties
+		return copyPropertiesMap(RelationStorage[targetType][targetID][sourceType][sourceID].Properties)
 	}
 }
 
@@ -2582,4 +2584,12 @@ func deepCopyRelation(relation types.StorageRelation) types.StorageRelation {
 	}
 
 	return newRelation
+}
+
+func copyPropertiesMap(properties map[string]string) map[string]string {
+	var ret map[string]string
+	for k, v := range properties {
+		ret[k] = v
+	}
+	return ret
 }

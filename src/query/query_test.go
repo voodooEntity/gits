@@ -914,6 +914,28 @@ func TestRequiredQueryJoinInDepthSuccess(t *testing.T) {
 	})
 }
 
+func TestRequiredQueryJoinWithRelationValuesSuccess(t *testing.T) {
+	testdata := mapQbStructureMap()
+	gits.MapTransportData(testdata)
+	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	qry := New().Read("Person").To(
+		New().Read("Marketplace").Match("Value", "==", "Gabor").To(
+			New().Read("Country").Match("Value", "==", "Germany"),
+		),
+	)
+	ret := Execute(qry)
+
+	if 1 != len(ret.Entities) || 1 != len(ret.Entities[0].ChildRelations) || 1 != len(ret.Entities[0].ChildRelations[0].Target.ChildRelations) {
+		t.Error("wrong result format", ret)
+	}
+
+	archivist.Info("Result data", ret)
+
+	t.Cleanup(func() {
+		Cleanup()
+	})
+}
+
 func printData(data any) {
 	t, _ := json.MarshalIndent(data, "", "\t")
 	archivist.Info("Query Data Struct", string(t))
