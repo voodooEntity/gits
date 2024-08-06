@@ -286,11 +286,13 @@ func Execute(query *Query) transport.Transport {
 	if 0 < len(query.Map) {
 		// do we work with linked data? this gonne be the main case
 		if linked {
+			collectAddressPairs := [][4]int{}
 			for key, entityAddress := range resultAddresses {
 				// recursive execute our actions
 				children, parents, tmpAddressPairs, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairs)
+
 				// append the current addresspairs since it can be used for unlinking or other funny stuff
-				addressPairs = append(addressPairs, tmpAddressPairs...) // i dont like it but ok for now ### todo overthink
+				collectAddressPairs = append(collectAddressPairs, tmpAddressPairs...) // i dont like it but ok for now ### todo overthink
 				// now if given store children and parents entities
 				if 0 < len(children) {
 					resultData[key].ChildRelations = append(resultData[key].ChildRelations, children...)
@@ -298,6 +300,7 @@ func Execute(query *Query) transport.Transport {
 				if 0 < len(parents) {
 					resultData[key].ParentRelations = append(resultData[key].ParentRelations, parents...)
 				}
+				//archivist.Info("addressPairs", tmpAddressPairs)
 
 				// are there any results?
 				if 0 < amount || !query.HasRequiredSubQueries() {
@@ -308,6 +311,7 @@ func Execute(query *Query) transport.Transport {
 					}
 				}
 			}
+			addressPairs = append(addressPairs, collectAddressPairs...)
 		} else { // unlinked data - for now the only case for this is the METHOD_LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
 			for _, targetQuery := range query.Map {
 				tagretBaseMatchList, targetPopertyMatchList := parseConditions(&targetQuery)
@@ -411,6 +415,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 		}
 		// since we got data we gonne get recursive from here
 		if 0 < len(query.Map) {
+			collectAddressList := [][4]int{}
 			for key, entityAddress := range resultAddresses {
 				// further execute and store data on return
 				children, parents, tmpAddressList, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairList)
@@ -420,7 +425,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 					tmpAddressList = append(tmpAddressList, [4]int{entityAddress[0], entityAddress[1], sourceAddress[0], sourceAddress[1]})
 				}
 
-				addressPairList = append(addressPairList, tmpAddressList...)
+				collectAddressList = append(collectAddressList, tmpAddressList...)
 				if 0 < len(children) {
 					resultData[key].Target.ChildRelations = append(resultData[key].Target.ChildRelations, children...)
 				}
@@ -432,6 +437,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 					i++
 				}
 			}
+			addressPairList = append(addressPairList, collectAddressList...)
 		} else {
 			// there must be a smarter way for the following problem:
 			for _, entityAddress := range resultAddresses {
@@ -463,7 +469,6 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 				}
 			}
 		}
-
 	}
 	return retChildren, retParents, addressPairList, i
 }

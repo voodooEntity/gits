@@ -39,7 +39,7 @@ func main() {
 	//testSimpleReadWithReduce()
 	//testUpdateEntityValue()
 	// testTraverseOut()
-	buildWebcrawlerFinalQuery()
+	//buildWebcrawlerFinalQuery()
 	//testTraverseIn()
 	//testDeleteEntityByTypeAndID()
 	//testQueryLinkTo()
@@ -61,7 +61,128 @@ func main() {
 	//testOrderByAlphabeticalValueAsc()
 	//testOrderByAlphabeticalValueDesc()
 	//testSpecificQueryContentCompareJs()
+	//debugCartographMapExplosion()
+	debugCartographMapExplosion2()
 	fmt.Println("Time took ", time.Since(start))
+}
+
+func debugCartographMapExplosion2() {
+	newMap := transport.TransportEntity{
+		ID:    -1,
+		Type:  "map",
+		Value: "asd",
+		Properties: map[string]string{
+			"XCells":     "1000",
+			"YCells":     "1000",
+			"XCellWidth": "16",
+			"YCellWidth": "16",
+		},
+	}
+	// create and map the necessary map cells
+	// ### ignoring int conversion errors
+	xCells, _ := strconv.Atoi("1000")
+	yCells, _ := strconv.Atoi("1000")
+	for y := 0; y < yCells; y++ {
+		for x := 0; x < xCells; x++ {
+			CellID := y*xCells + x
+			// map the new cell
+			newMap.ChildRelations = append(newMap.ChildRelations, transport.TransportRelation{
+				Target: transport.TransportEntity{
+					ID:    -1,
+					Type:  "cell",
+					Value: strconv.Itoa(CellID),
+					Properties: map[string]string{
+						"Row":    strconv.Itoa(y),
+						"Column": strconv.Itoa(x),
+					},
+				},
+			})
+			fmt.Print("\r", CellID)
+		}
+	}
+
+	newStorageMap := gits.MapTransportData(newMap)
+
+	// to parent
+	qry := query.New().Read("cell").From(
+		query.New().Reduce("map").Match("ID", "==", strconv.Itoa(newStorageMap.ID)),
+	).Order("Value", query.ORDER_DIRECTION_ASC, query.ORDER_MODE_NUM)
+
+	// to child
+	//qry := query.New().Read("cell").To(
+	//	query.New().Reduce("map").Match("ID", "==", strconv.Itoa(1)),
+	//).Order("Value", query.ORDER_DIRECTION_ASC, query.ORDER_MODE_NUM)
+
+	//qry := query.New().Read("map").To(
+	//	query.New().Read("cell"),
+	//).Order("Value", query.ORDER_DIRECTION_ASC, query.ORDER_MODE_NUM)
+	archivist.Info("Query element", *qry)
+	res := query.Execute(qry)
+	archivist.Info("Result", res.Amount)
+}
+
+func debugCartographMapExplosion() {
+	newMap := gits.MapTransportData(transport.TransportEntity{
+		ID:    -1,
+		Type:  "map",
+		Value: "asd",
+		Properties: map[string]string{
+			"XCells":     "1000",
+			"YCells":     "1000",
+			"XCellWidth": "16",
+			"YCellWidth": "16",
+		},
+	})
+	fmt.Println("\n")
+	// create and map the necessary map cells
+	// ### ignoring int conversion errors
+	xCells, _ := strconv.Atoi("1000")
+	yCells, _ := strconv.Atoi("1000")
+	for y := 0; y < yCells; y++ {
+		for x := 0; x < xCells; x++ {
+			CellID := y*xCells + x
+			// map the new cell
+			newCell := gits.MapTransportData(transport.TransportEntity{
+				ID:    -1,
+				Type:  "cell",
+				Value: strconv.Itoa(CellID),
+				Properties: map[string]string{
+					"Row":    strconv.Itoa(y),
+					"Column": strconv.Itoa(x),
+				},
+			})
+			// link the new cell
+
+			// to parent
+			qry := query.New().Link("map").Match("ID", "==", strconv.Itoa(newMap.ID)).To(
+				query.New().Find("cell").Match("ID", "==", strconv.Itoa(newCell.ID)),
+			)
+
+			// to child
+			//qry := query.New().Link("cell").Match("ID", "==", strconv.Itoa(newCell.ID)).To(
+			//	query.New().Find("map").Match("ID", "==", strconv.Itoa(newMap.ID)),
+			//)
+			query.Execute(qry)
+			fmt.Print("\r", CellID)
+		}
+	}
+
+	// to parent
+	qry := query.New().Read("cell").From(
+		query.New().Reduce("map").Match("ID", "==", strconv.Itoa(1)),
+	).Order("Value", query.ORDER_DIRECTION_ASC, query.ORDER_MODE_NUM)
+
+	// to child
+	//qry := query.New().Read("cell").To(
+	//	query.New().Reduce("map").Match("ID", "==", strconv.Itoa(1)),
+	//).Order("Value", query.ORDER_DIRECTION_ASC, query.ORDER_MODE_NUM)
+
+	//qry := query.New().Read("map").To(
+	//	query.New().Read("cell"),
+	//).Order("Value", query.ORDER_DIRECTION_ASC, query.ORDER_MODE_NUM)
+	archivist.Info("Query element", *qry)
+	res := query.Execute(qry)
+	archivist.Info("Result", res)
 }
 
 func createTestDataLinked() {
