@@ -1,11 +1,11 @@
 package query
 
 import (
+	"github.com/voodooEntity/gits/src/storage"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/voodooEntity/gits"
 	"github.com/voodooEntity/gits/src/mutexhandler"
 	"github.com/voodooEntity/gits/src/transport"
 )
@@ -218,14 +218,14 @@ func (self *Query) TraverseIn(depth int) *Query {
 	return self
 }
 
-func Execute(query *Query) transport.Transport {
+func Execute(store *storage.Storage, query *Query) transport.Transport {
 	// no type pool = something is very wrong
 	if 0 == len(query.Pool) {
 		return transport.Transport{}
 	}
 
 	// prepare mutex handler
-	mutexh := mutexhandler.New()
+	mutexh := mutexhandler.New(store)
 
 	// we are in the most outer layer so we gonne lock here,
 	// also dispatch what type of mutex we need. if we only read
@@ -268,7 +268,7 @@ func Execute(query *Query) transport.Transport {
 	baseMatchList, propertyMatchList := parseConditions(query)
 
 	// now we need to fetch the list of entities fitting to our filters
-	resultData, resultAddresses, amount := gits.GetEntitiesByQueryFilter(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, returnDataFlag)
+	resultData, resultAddresses, amount := store.GetEntitiesByQueryFilter(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, returnDataFlag)
 
 	// prepare transport data
 	ret := transport.Transport{
@@ -289,7 +289,7 @@ func Execute(query *Query) transport.Transport {
 			collectAddressPairs := [][4]int{}
 			for key, entityAddress := range resultAddresses {
 				// recursive execute our actions
-				children, parents, tmpAddressPairs, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairs)
+				children, parents, tmpAddressPairs, amount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairs)
 
 				// append the current addresspairs since it can be used for unlinking or other funny stuff
 				collectAddressPairs = append(collectAddressPairs, tmpAddressPairs...) // i dont like it but ok for now ### todo overthink
@@ -315,7 +315,7 @@ func Execute(query *Query) transport.Transport {
 		} else { // unlinked data - for now the only case for this is the METHOD_LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
 			for _, targetQuery := range query.Map {
 				tagretBaseMatchList, targetPopertyMatchList := parseConditions(&targetQuery)
-				_, tmpLinkAddresses, tmpLinkAmount := gits.GetEntitiesByQueryFilter(targetQuery.Pool, targetQuery.Conditions, tagretBaseMatchList[FILTER_ID], tagretBaseMatchList[FILTER_VALUE], tagretBaseMatchList[FILTER_CONTEXT], targetPopertyMatchList, false)
+				_, tmpLinkAddresses, tmpLinkAmount := store.GetEntitiesByQueryFilter(targetQuery.Pool, targetQuery.Conditions, tagretBaseMatchList[FILTER_ID], tagretBaseMatchList[FILTER_VALUE], tagretBaseMatchList[FILTER_CONTEXT], targetPopertyMatchList, false)
 				if 0 < tmpLinkAmount {
 					linkAddresses[targetQuery.Direction] = append(linkAddresses[targetQuery.Direction], tmpLinkAddresses...)
 					linkAmount = linkAmount + tmpLinkAmount
@@ -334,19 +334,19 @@ func Execute(query *Query) transport.Transport {
 		case METHOD_UPDATE:
 			// if we got any results and values to update given fire Batch update
 			if 0 < len(query.Values) {
-				gits.BatchUpdateAddressList(resultAddresses, query.Values)
+				store.BatchUpdateAddressList(resultAddresses, query.Values)
 			}
 		case METHOD_DELETE:
-			gits.BatchDeleteAddressList(resultAddresses)
+			store.BatchDeleteAddressList(resultAddresses)
 		case METHOD_LINK:
 			affectedAmount := 0
 			if 0 < linkAmount {
 				for direction, tmpLinkAddresses := range linkAddresses {
 					if 0 < len(tmpLinkAddresses) {
 						if DIRECTION_CHILD == direction {
-							affectedAmount += gits.LinkAddressLists(resultAddresses, tmpLinkAddresses)
+							affectedAmount += store.LinkAddressLists(resultAddresses, tmpLinkAddresses)
 						} else { // else it must be towards parent so we flip params
-							affectedAmount += gits.LinkAddressLists(tmpLinkAddresses, resultAddresses)
+							affectedAmount += store.LinkAddressLists(tmpLinkAddresses, resultAddresses)
 						}
 					}
 				}
@@ -356,7 +356,7 @@ func Execute(query *Query) transport.Transport {
 			affectedAmount := 0
 			if 0 < len(addressPairs) {
 				for _, addressPair := range addressPairs {
-					gits.DeleteRelationUnsafe(addressPair[0], addressPair[1], addressPair[2], addressPair[3])
+					store.DeleteRelationUnsafe(addressPair[0], addressPair[1], addressPair[2], addressPair[3])
 					affectedAmount++
 				}
 			}
@@ -365,7 +365,7 @@ func Execute(query *Query) transport.Transport {
 			// add traverse data for root level entities - only for read
 			if direction, depth, traversed := isTraversed(*query); traversed {
 				for id, _ := range ret.Entities {
-					gits.TraverseEnrich(&(ret.Entities[id]), direction, depth)
+					store.TraverseEnrich(&(ret.Entities[id]), direction, depth)
 				}
 			}
 		}
@@ -385,7 +385,7 @@ func Execute(query *Query) transport.Transport {
 	return transport.Transport{}
 }
 
-func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairList [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
+func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddress [2]int, addressPairList [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
 	var retParents []transport.TransportRelation
 	var retChildren []transport.TransportRelation
 	i := 0
@@ -401,7 +401,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 		}
 
 		// get data from subquery
-		resultData, resultAddresses, amount := gits.GetEntitiesByQueryFilterAndSourceAddress(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, sourceAddress, query.Direction, returnDataFlag)
+		resultData, resultAddresses, amount := store.GetEntitiesByQueryFilterAndSourceAddress(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, sourceAddress, query.Direction, returnDataFlag)
 
 		// if we got no returns
 		if 0 == amount {
@@ -418,7 +418,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 			collectAddressList := [][4]int{}
 			for key, entityAddress := range resultAddresses {
 				// further execute and store data on return
-				children, parents, tmpAddressList, amount := recursiveExecuteLinked(query.Map, entityAddress, addressPairList)
+				children, parents, tmpAddressList, amount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairList)
 				if DIRECTION_CHILD == query.Direction {
 					tmpAddressList = append(tmpAddressList, [4]int{sourceAddress[0], sourceAddress[1], entityAddress[0], entityAddress[1]})
 				} else {
@@ -465,7 +465,7 @@ func recursiveExecuteLinked(queries []Query, sourceAddress [2]int, addressPairLi
 			*appender = append(*appender, tmpRet...)
 			if direction, depth, ok := isTraversed(query); ok {
 				for i := start; i < start+tmpRetLen; i++ {
-					gits.TraverseEnrich(&((*appender)[i].Target), direction, depth)
+					store.TraverseEnrich(&((*appender)[i].Target), direction, depth)
 				}
 			}
 		}

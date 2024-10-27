@@ -2,6 +2,10 @@ package transport
 
 import "strings"
 
+const MAP_FORCE_CREATE = -1
+const MAP_BY_TYPE_AND_VALUE = 0
+const MAP_CREATE_IF_NOT_EXISTS_TYPE_VALUE = -2
+
 type Transport struct {
 	Entities  []TransportEntity
 	Relations []TransportRelation
