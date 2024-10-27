@@ -28,6 +28,11 @@ type Storage struct {
 	RelationStorageMutex *sync.RWMutex
 }
 
+const (
+	MAP_FORCE_CREATE  = -1
+	MAP_TYPE_AND_VAUE = 0
+)
+
 // direction constants
 const (
 	DIRECTION_NONE   = -1

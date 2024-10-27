@@ -606,7 +606,7 @@ Compare Operators:
 -> in               [X]
 
 
-AFTERPROCESSING:
+POSTPROCESSING:
 -> ORDER BY % ASC/DESC  [X]
 -> TraverseOut          [X]
 -> TraverseIn           [X]
