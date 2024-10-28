@@ -15,14 +15,14 @@
   <a href="#use-cases">Use Cases</a> •
   <a href="#how-to-use">How To Use</a> •
   <a href="#roadmap">Roadmap</a> •
-  <a href="#changelog">Changelog</a> •
+  <a href="DOCS/OVERVIEW.md">Documentation</a> •
   <a href="#license">License</a>
 </p>
 
 ## Key Features
 - Full in-memory handling
 - Concurrency safe and optimized for multithreading applications
-- Native directed graph structure 
+- Native directed graph structure support
 - Full access via direct storage api
 - Simple builder based query language (json compatible)
 - Supports multiple parallel storages (factory)
@@ -35,7 +35,7 @@
 <span style="color:#35b9e9">GITS</span> has been developed in order to enable developers to use complex data structures in their golang applications. Due to the nature of <span style="color:#35b9e9">GITS</span> handling all storage and operations in memory, it allows for very fast processing of large amounts of datasets and structures. The library also is designed for multithreading purposes and therefor full concurrency safe. While providing a simple  query interface, which probably suits most of the use cases, <span style="color:#35b9e9">GITS</span> also exposes the storage API so the developer can optimize his application without any restrictions.
 
 ## Use Cases
-The following use cases are example either of applications in which i used GITS or ideas that came to my mind in which using GITS could be beneficial.
+The following use cases are example either of applications in which i used GITS or ideas that came to my mind in which using GITS could be beneficial. Apart from that, GITS can be used in any environment that can benefit from the features it provides.
 
 - Corona Dashboard
   - Back in the main phase of corona i created my own dashboard hosting and showing the current infection/etc statistics for countries/states/ and other subnational units. This data was fully kept in memory till i hit my servers limits (20gb ~). 
@@ -153,11 +153,11 @@ For more information please refer to "Storage API Reference and Examples" addlin
 
 
 ## Roadmap
-Right now im at a point of major restructuring. GITS, which initially started as a standalone database (SlingshotDB) and transformed into a library, is undergoing a probably final big restructuring. 
+Right now im at a point of major restructuring. GITS, which initially started as a standalone database (SlingshotDB) and transformed into a library - is undergoing a probably final big restructuring. 
 
 While in its initial form GITS was planned as one big storage, the library has been adjusted to provide as many storages as you need as part of the Restructuring Part 1. In this step the original form of persistence (custom) has been kicked out. While the persistence was working fine, keeping it up to date turned out to be to much of a "sideproject" that i decided to remove it. 
 
-Instead work towards an implementation that allows storages like mysql, pgsql etc to be used by a simple plugin system - this will be part of Restructuring Part 2. These two major steps in reforming GITS should allow it to be even more modular and finally simplify the "interface" on how to be used. 
+Instead, work towards an implementation that allows storages like mysql, pgsql etc to be used by a simple plugin system - this will be part of Restructuring Part 2. These two major steps in reforming GITS should allow it to be even more modular and finally simplify the "interface" on how to be used. 
 
 These two Restructuring projects are priority above other optimizations. 
 
@@ -170,6 +170,7 @@ These two Restructuring projects are priority above other optimizations.
   - Remove old persistence implementation
   - Adjust README.md and add more necessary documents for full documentation
 - [ ] Restructure Part 2
+  - Add CHANGELOG.md
   - Implement plugin based persistence system
   - Add config system for persistence etc.
   - Adjust logger used to standard format
@@ -177,13 +178,8 @@ These two Restructuring projects are priority above other optimizations.
 
 
 ## Changelog
-***Notice: While in alpha, minor version updates may be breaking. While i will try to reduce the amount of breaking changes, it still may happen. When breaking changes are to be expected it will be informed about in the breaking versions changelog.***
 
-[Check the Changelog](./CHANGELOG.md)
-
-Latest Release [Alpha 0.3.0](https://github.com/voodooEntity/go-tachicrypt/releases/tag/0.3.0)
-
-
+coming soon
 
 ## License
 [Apache License Version 2.0](./LICENSE)
