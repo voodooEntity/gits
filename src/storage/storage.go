@@ -29,8 +29,8 @@ type Storage struct {
 }
 
 const (
-	MAP_FORCE_CREATE  = -1
-	MAP_TYPE_AND_VAUE = 0
+	MAP_FORCE_CREATE        = -1
+	MAP_USERT_VALUE_CONTEXT = 0
 )
 
 // direction constants

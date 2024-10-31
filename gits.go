@@ -122,6 +122,6 @@ func (g *Gits) ExecuteQuery(qry *query.Query) transport.Transport {
 	return query.Execute(g.storage, qry)
 }
 
-func (g *Gits) MapTransport(data transport.TransportEntity) transport.TransportEntity {
+func (g *Gits) MapData(data transport.TransportEntity) transport.TransportEntity {
 	return g.storage.MapTransportData(data)
 }

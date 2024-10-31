@@ -1,10 +1,11 @@
 # Instance Handling
 GITS allows the user to create as many "instances" as he pleases to. In most use cases one instance should be sufficient, but in this document i will explain the possibilities and options GITS provides in terms of instance handling.
 
-## Definition
-Each GITS instance will hold an *storage.Storage to a newly create Storage instance. It also exposes several methods to interact with said storage, those are explained in detail in the other topics.
 
-Means, with every instance you create, you will create a complete storage instance underlying that is separated from the others.
+## Definition
+Each gits.Gits instance will hold an *storage.Storage to a newly create Storage instance. It also exposes several methods to interact with said storage, those are explained in detail in the other topics.
+
+Means, with every instance you create, you will create a complete storage instance underlying that is separated from the others. The Gits instance itself holds this Storage and provides an easy combined interface for Mapping / Query'ing Data while also providing the option to directly access the Storage directly.
 
 ## API
 The GITS package provides the following public functions in terms of instance handling
