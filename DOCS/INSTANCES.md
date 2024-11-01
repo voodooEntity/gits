@@ -7,6 +7,13 @@ Each gits.Gits instance will hold an *storage.Storage to a newly create Storage 
 
 Means, with every instance you create, you will create a complete storage instance underlying that is separated from the others. The Gits instance itself holds this Storage and provides an easy combined interface for Mapping / Query'ing Data while also providing the option to directly access the Storage directly.
 
+## Index
+* [Definition](#definition)
+* [API](#api)
+* [Usage](#usage)
+* [FAQ](#faq)
+
+
 ## API
 The GITS package provides the following public functions in terms of instance handling
 ```go
@@ -60,7 +67,6 @@ So you basically can always access your storages from wherever you want by addre
 
 The system is designed to keep you as free in your choice of usage as possible.
 
-
 Finally there is the method
 ```go
 gits.GetQueryBuilder()
@@ -68,8 +74,6 @@ gits.GetQueryBuilder()
 as the name already suggests this method is part of the query topic. The method is exposed directly since there is no direct relation between a query instance and a storage before the actual execution. 
 
 Please refer to [Query Builder / Language](QUERY.md) on the actual usage of this method.
-
-
 
 
 ## FAQ
