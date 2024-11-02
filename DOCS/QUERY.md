@@ -1,7 +1,28 @@
-## Query Package Documentation
+# Query Builder
+
+## Index
+* [Overview](#overview)
+* [Query Methods](#query-methods)
+* [Examples and Usage](#examples-and-usage)
+  * [1. Simple Read Query](#1-simple-read-query)
+  * [2. Filtering by Value:](#2-filtering-by-value)
+  * [3. Filtering by Context:](#3-filtering-by-context)
+  * [4. Filtering by Property:](#4-filtering-by-property)
+  * [5. Combining Filters:](#5-combining-filters)
+  * [6. Combining filters with OR Condition](#6-combining-filters-with-or-condition)
+  * [7. Simple Child Join:](#7-simple-child-join)
+  * [8. Filtered Join:](#8-filtered-join)
+  * [9. Traversing out:](#9-traversing-out)
+  * [10. Update entities](#10-update-entities)
+  * [11 Delete entities](#11-delete-entities)
+  * [12. Link entities](#12-link-entities)
+  * [13. Unlink entities](#13-unlink-entities)
+  * [14. Adjusting the result order](#14-adjusting-the-result-order)
+* [Definitions](#definitions)
+  * [Supported Match Operators](#supported-match-operators)
 
 ## Overview
-The `query` package provides a flexible and powerful query language for querying data within a specific data model. This documentation aims to provide a comprehensive overview of the available methods and their usage.
+The GITS Query Language is a custom implementation optimized for the usage with GITS. GITS provides a Query Builder and execution method via a global accessible interface. The following document should provide an overview over the Methods available in this context and examples for various query actions. 
 
 ## Query Methods
 **1. Query Construction**
