@@ -2332,6 +2332,10 @@ func (s *Storage) match(alpha string, operator string, beta string) bool {
 		if alpha == beta {
 			return true
 		}
+	case "!=":
+		if alpha != beta {
+			return true
+		}
 	case "prefix":
 		// starts with
 		if strings.HasPrefix(alpha, beta) {

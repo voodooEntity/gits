@@ -5,12 +5,63 @@ import (
 	"github.com/voodooEntity/gits/src/query"
 	"github.com/voodooEntity/gits/src/storage"
 	"github.com/voodooEntity/gits/src/transport"
+	"log"
 	"sync"
 )
 
 var instances instanceIndex
 var instanceMutex = &sync.RWMutex{}
 var defaultInstance *Gits
+
+type Gits struct {
+	Name    string
+	storage *storage.Storage
+	logs    log.Logger
+	//config  *config.Config
+}
+
+func NewInstance(name string) *Gits {
+	inst := &Gits{
+		Name:    name,
+		storage: storage.NewStorage(),
+		logs:    log.Logger{},
+	}
+	instances.Add(name, inst)
+	return instances.GetByName(name)
+}
+
+func GetDefault() *Gits {
+	return instances.GetDefault()
+}
+
+func GetByName(name string) *Gits {
+	return instances.GetByName(name)
+}
+
+func SetDefault(name string) {
+	instances.SetDefault(name)
+}
+
+func RemoveInstance(name string) {
+	instances.Remove(name)
+	return
+}
+
+func NewQuery() *query.Query {
+	return query.New()
+}
+
+func (g *Gits) Storage() *storage.Storage {
+	return g.storage
+}
+
+func (g *Gits) ExecuteQuery(qry *query.Query) transport.Transport {
+	return query.Execute(g.storage, qry)
+}
+
+func (g *Gits) MapData(data transport.TransportEntity) transport.TransportEntity {
+	return g.storage.MapTransportData(data)
+}
 
 type instanceIndex map[string]*Gits
 
@@ -76,52 +127,4 @@ func (ii instanceIndex) Remove(name string) {
 			fmt.Println("No instances left setting active to nil pointer")
 		}
 	}
-}
-
-type Gits struct {
-	Name    string
-	storage *storage.Storage
-	//config  *config.Config
-}
-
-func NewInstance(name string) *Gits {
-	inst := &Gits{
-		Name:    name,
-		storage: storage.NewStorage(),
-	}
-	instances.Add(name, inst)
-	return instances.GetByName(name)
-}
-
-func GetDefault() *Gits {
-	return instances.GetDefault()
-}
-
-func GetByName(name string) *Gits {
-	return instances.GetByName(name)
-}
-
-func SetDefault(name string) {
-	instances.SetDefault(name)
-}
-
-func RemoveInstance(name string) {
-	instances.Remove(name)
-	return
-}
-
-func GetQueryBuilder() *query.Query {
-	return query.New()
-}
-
-func (g *Gits) Storage() *storage.Storage {
-	return g.storage
-}
-
-func (g *Gits) ExecuteQuery(qry *query.Query) transport.Transport {
-	return query.Execute(g.storage, qry)
-}
-
-func (g *Gits) MapData(data transport.TransportEntity) transport.TransportEntity {
-	return g.storage.MapTransportData(data)
 }

@@ -157,28 +157,28 @@ func (self *Query) OrMatch(alpha string, operator string, beta string) *Query {
 }
 
 func (self *Query) To(query *Query) *Query {
-	query.SetDirection(DIRECTION_CHILD)
+	query.setDirection(DIRECTION_CHILD)
 	query.Required = true
 	self.Map = append(self.Map, *query)
 	return self
 }
 
 func (self *Query) From(query *Query) *Query {
-	query.SetDirection(DIRECTION_PARENT)
+	query.setDirection(DIRECTION_PARENT)
 	query.Required = true
 	self.Map = append(self.Map, *query)
 	return self
 }
 
 func (self *Query) CanTo(query *Query) *Query {
-	query.SetDirection(DIRECTION_CHILD)
+	query.setDirection(DIRECTION_CHILD)
 	query.Required = false
 	self.Map = append(self.Map, *query)
 	return self
 }
 
 func (self *Query) CanFrom(query *Query) *Query {
-	query.SetDirection(DIRECTION_PARENT)
+	query.setDirection(DIRECTION_PARENT)
 	query.Required = false
 	self.Map = append(self.Map, *query)
 	return self
@@ -189,7 +189,7 @@ func (self *Query) Modify(properties ...string) *Query {
 	return self
 }
 
-func (self *Query) SetDirection(direction int) *Query {
+func (self *Query) setDirection(direction int) *Query {
 	self.Direction = direction
 	return self
 }
