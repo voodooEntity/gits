@@ -11,16 +11,20 @@
   * [5. Combining Filters:](#5-combining-filters)
   * [6. Combining filters with OR Condition](#6-combining-filters-with-or-condition)
   * [7. Simple Child Join:](#7-simple-child-join)
-  * [8. Filtered Join:](#8-filtered-join)
-  * [9. Traversing out:](#9-traversing-out)
-  * [10. Update entities](#10-update-entities)
-  * [11 Delete entities](#11-delete-entities)
-  * [12. Link entities](#12-link-entities)
-  * [13. Unlink entities](#13-unlink-entities)
-  * [14. Adjusting the result order](#14-adjusting-the-result-order)
-  * [15. Complex read query example](#15-complex-read-query-example)
+  * [8. Simple Parent Join:](#8-simple-parent-join)
+  * [9. Simple Optional Child Join:](#9-simple-optional-child-join)
+  * [10. Simple Optional Parent Join:](#10-simple-optional-parent-join)
+  * [11. Filtered Join:](#11-filtered-join)
+  * [12. Traversing out:](#12-traversing-out)
+  * [13. Update entities](#13-update-entities)
+  * [14 Delete entities](#14-delete-entities)
+  * [15. Link entities](#15-link-entities)
+  * [16. Unlink entities](#16-unlink-entities)
+  * [17. Adjusting the result order](#17-adjusting-the-result-order)
+  * [18. Complex read query example](#18-complex-read-query-example)
 * [Definitions](#definitions)
   * [Supported Match Operators](#supported-match-operators)
+
 
 ## Overview
 The GITS Query Language is a custom implementation optimized for the usage with GITS. GITS provides a Query Builder and execution method via a global accessible interface. The following document should provide an overview over the Methods available in this context and examples for various query actions. 
