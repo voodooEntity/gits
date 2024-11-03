@@ -15,7 +15,7 @@
   <a href="#use-cases">Use Cases</a> •
   <a href="#how-to-use">How To Use</a> •
   <a href="#roadmap">Roadmap</a> •
-  <a href="DOCS/OVERVIEW.md">Documentation</a> •
+  <a href="DOCS/INDEX.md">Documentation</a> •
   <a href="#license">License</a>
 </p>
 

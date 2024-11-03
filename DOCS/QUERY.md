@@ -114,37 +114,58 @@ This query reads all entities of type "Entity" where either ("Context" equals "L
 qry := gits.NewQuery().Read("EntityA").To(gits.NewQuery().Read("EntityB"))
 result := gitsInstance.ExecuteQuery(qry)
 ```
-This query reads all entities of type "EntityA" and their child linked "EntityB" entities.
+This query reads all entities of type "EntityA" and their child linked "EntityB" entities. "To" is a "required" call which means there must be linked entities
 
-### 8. Filtered Join:
+### 8. Simple Parent Join:
+```go
+qry := gits.NewQuery().Read("EntityA").From(gits.NewQuery().Read("EntityB"))
+result := gitsInstance.ExecuteQuery(qry)
+```
+This query reads all entities of type "EntityA" and their parent linked "EntityB" entities. "From" is a "required" call which means there must be linked entities.
+
+### 9. Simple Optional Child Join:
+```go
+qry := gits.NewQuery().Read("EntityA").CanTo(gits.NewQuery().Read("EntityB"))
+result := gitsInstance.ExecuteQuery(qry)
+```
+This query reads all entities of type "EntityA" and their, if existent, child linked "EntityB" entities. "CanTo" is a "optional" call which means there can be linked entities but its not required.
+
+### 10. Simple Optional Parent Join:
+```go
+qry := gits.NewQuery().Read("EntityA").CanFrom(gits.NewQuery().Read("EntityB"))
+result := gitsInstance.ExecuteQuery(qry)
+```
+This query reads all entities of type "EntityA" and their, if existent, parent linked "EntityB" entities. "CanFrom" is a "optional" call which means there can be linked entities but its not required.
+
+### 11. Filtered Join:
 ```go
 qry := gits.NewQuery().Read("EntityA").To(gits.NewQuery().Read("EntityB").Match("Value", "==", "someValue"))
 result := gitsInstance.ExecuteQuery(qry)
 ```
 This query reads all entities of type "EntityA" and their linked "EntityB" entities where the "EntityB" entities have a "Value" property equal to "someValue".
 
-### 9. Traversing out:
+### 12. Traversing out:
 ```go
 qry := gits.NewQuery().Read("Entity").TraverseOut(3)
 result := gitsInstance.ExecuteQuery(qry)
 ```
 This query reads all entities of type "Entity", than it will traverse out (follow relations towards children) up to a depth of 3. Can be especially useful in abstract structures where properties are handled as child entities or abstracts without static structural definitions. Traverse is supported towards children "TraverseOut" and parents "TraverseIn". 
 
-### 10. Update entities
+### 13. Update entities
 ```go
 qry := gits.NewQuery().Update("Entity").Match("Value","==","old").Set("Value", "Lorem").Set("Context", "Ipsum").Set("Properties.dolor","appropinquare")
 result := gitsInstance.Execute(qry)
 ```
 This query will update all entities of type "Entity" which match ("Value" equals "old"). It will update "Context" to "Ipsum", "Value" to "Lorem" and the Property "dolor" to "appropinquare". This can affect a single or multiple entities, based on your filters. Update query must always be a root level query. Update can be used with "(Can)To" and "(Can)From" in order to reduce/filter the affected datasets. It is recommended to use "Reduce()" instead of "Read()" in such subqueries to minimize the amount of allocated memory.
 
-### 11 Delete entities
+### 14 Delete entities
 ```go
 qry := gits.NewQuery().Delete("Entity").Match("Value", "==", "deleteme")
 result := gitsInstance.Execute(qry)
 ```
 This query will delete all entities of type "Entity" which match ("Value" equals "deleteme"). This can affect a single or multiple entities, based on your filters. Delete query must always be a root level query. Delete can be used with "(Can)To" and "(Can)From" in order to reduce/filter the affected datasets. It is recommended to use "Reduce()" instead of "Read()" in joins to minimize the amount of allocated memory.
 
-### 12. Link entities
+### 15. Link entities
 ```go
 qry := gits.NewQuery().Link("EntityA").Match("Value", "==", "alpha").To(
     gits.NewQuery().Find("EntityB").Match("Value", "==", "omega"),
@@ -153,7 +174,7 @@ gitsInstance.ExecuteQuery(qry)
 ```
 This query will find all entities of type "EntityA" which match "Value" equals "alpha" and link (create a directed relation) the result list to result of the join which matches entities of type "EntityB" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Link" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our link function. You can use this to link any amount of entities. Link query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be created, it is not possible to use those as pure filter right now.  
 
-### 13. Unlink entities
+### 16. Unlink entities
 ```go
 qry := gits.NewQuery().Unlink("EntityA").Match("Value", "==", "alpha").To(
     gits.NewQuery().Find("EntityB").Match("Value", "==", "omega"),
@@ -162,7 +183,7 @@ gitsInstance.ExecuteQuery(qry)
 ```
 This query will find all entities of type "EntityA" which match "Value" equals "alpha" and unlink (remove a directed relation) the result list to result of the join which matches entities of type "EntityB" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Unlink" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our unlink function. You can use this to unlink any amount of entities. Unlink query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be deleted, it is not possible to use those as pure filter right now.
 
-### 14. Adjusting the result order
+### 17. Adjusting the result order
 ```go
 qry := gits.NewQuery().Read("EntityA").To(
     gits.NewQuery().Read("EntityB"),
@@ -171,7 +192,7 @@ result := gitsInstance.ExecuteQuery(qry)
 ```
 This query will find all entities of type "EntityA" which are linked to entities of type "EntityB". Before returning the data, it will resort the order of the root level results by the field "Value" direction "ASC" (ascending) in mode "Alpha(numeric)". Order can only be applied on root level queries and will sort results only on root level results.
 
-### 15. Complex read query example
+### 18. Complex read query example
 ```go
 qry := gits.NewQuery().Read("Entity").To(
     gits.NewQuery().Reduce("EntityA").To(
@@ -204,3 +225,6 @@ The following operators are supported in terms of matching actions.
 | <        | alpha is lower than beta         | int                             | int       |
 | <=       | alpha is lower or equal to beta  | int                             | int       |
 | in       | if any alpha is equal to beta    | alpha is split by "," delimiter |           |
+
+
+[Documentation Overview](INDEX)
