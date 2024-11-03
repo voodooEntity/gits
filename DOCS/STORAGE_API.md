@@ -1,4 +1,14 @@
 # Storage API
+
+## Index
+* [Overview](#overview)
+* [API Definitions](#api-definitions)
+  * [Core Functions](#core-functions)
+  * [Relation Functions](#relation-functions)
+  * [Type and Entity Management](#type-and-entity-management)
+  * [Additional Functions / Mainly build for query interpreter](#additional-functions--mainly-build-for-query-interpreter)
+
+## Overview
 GITS exposes its internal storage api to the developer. While it is recommended to primary use [queries](./QUERY.md) and [data mapper](DATA_MAPPING.md) there might be certain situations in which direct usage of the storage might be better.
 
 It is important to notice that the storage works with a different kind of datasets than [query](./QUERY.md) and [data mapper](./DATA_MAPPING.md) - "StorageEntity" and "StorageRelation". You might want to have a peek at the [struct definitions](./STORAGE_ARCHITECTURE.md).
@@ -52,6 +62,8 @@ The two major differences between the datasets are:
   * **Returns:** *nil*
   * *Note: Has an unsafe counterpart.*
 
+[to top](./STORAGE_API.md)
+
 ### Relation Functions
 
 * **GetRelation(srcType int, srcID int, targetType int, targetID int)**
@@ -99,6 +111,8 @@ The two major differences between the datasets are:
   * **Returns:** *map[int]types.StorageRelation, error*
   * *Note: Has an unsafe counterpart.*
 
+[to top](./STORAGE_API.md)
+
 ### Type and Entity Management
 
 * **GetEntityTypes()**
@@ -136,6 +150,8 @@ The two major differences between the datasets are:
   * Retrieves the number of entities of a specific type.
   * **Returns:** *int, error*
 
+[to top](./STORAGE_API.md)
+
 ### Additional Functions / Mainly build for query interpreter
 
 * **MapTransportData(data transport.TransportEntity)**
@@ -159,3 +175,6 @@ The two major differences between the datasets are:
 * **TraverseEnrich(entity *transport.TransportEntity, direction int, depth int)**
   * Traverses and enriches an entity.
   * **Returns:** *none*
+
+[to top](./STORAGE_API.md)
+[Documentation Overview](INDEX.md)
