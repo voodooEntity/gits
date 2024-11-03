@@ -1,7 +1,6 @@
 package mutexhandler
 
 import (
-	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits/src/storage"
 )
 
@@ -31,7 +30,7 @@ func (self *MutexHandler) Apply(muident int) *MutexHandler {
 	if 0 < len(self.Applied) {
 		for _, val := range self.Applied {
 			if val == muident {
-				archivist.Debug("Trying to multi-apply same lock in MutexHandler")
+				// archivist.Debug("Trying to multi-apply same lock in MutexHandler")
 				return self
 			}
 		}

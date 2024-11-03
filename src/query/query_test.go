@@ -2,7 +2,7 @@ package query
 
 import (
 	"encoding/json"
-	"github.com/voodooEntity/archivist"
+	"fmt"
 	"github.com/voodooEntity/gits/src/storage"
 	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
@@ -13,7 +13,7 @@ import (
 var testStorage *storage.Storage
 
 func initStorage() {
-	archivist.Init("info", "stdout", "blafu")
+	// archivist.Init("info", "stdout", "blafu")
 
 	newStorage := storage.NewStorage()
 	testStorage = newStorage
@@ -364,7 +364,7 @@ func TestReadJoinMatchWithMultipleRequiredMatch(t *testing.T) {
 		New().Read("Test").Match("Value", "==", "TestABC").Match("Context", "==", "TestABC"),
 	)
 	ret := Execute(testStorage, qry)
-	archivist.Info("data return", ret)
+	fmt.Println("data return", ret)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
@@ -422,7 +422,7 @@ func TestFindValidTokenRequest(t *testing.T) {
 		New().Read("Token").Match("Value", "==", "findme").Match("Properties.Context", "==", "TestABC"),
 	)
 	ret := Execute(testStorage, qry)
-	archivist.Info("data return", ret)
+	fmt.Println("data return", ret)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
@@ -731,7 +731,7 @@ func review_TestbuildTestQueryJson3(t *testing.T) {
 func review_TestbuildTestQueryJsonGetQbQueries(t *testing.T) {
 	initStorage()
 	//
-	archivist.Info("Get all marketplaces implemented by Max Mustermann from person")
+	fmt.Println("Get all marketplaces implemented by Max Mustermann from person")
 	qry := New().Read("Person").Match("Value", "==", "Max Mustermann").To(
 		New().Read("Marketplace").Match("Properties.IsAbstract", "==", "false"),
 	).To(
@@ -742,14 +742,14 @@ func review_TestbuildTestQueryJsonGetQbQueries(t *testing.T) {
 	//printData(qry)
 
 	//
-	archivist.Info("Get all marketplaces shipping to germany")
+	fmt.Println("Get all marketplaces shipping to germany")
 	qry = New().Read("Marketplace").To(
 		New().Reduce("Country").Match("Value", "==", "Germany"),
 	)
 	//printData(qry)
 
 	//
-	archivist.Info("Get all marketplaces ")
+	fmt.Println("Get all marketplaces ")
 	qry = New().Read("Person").Match("Value", "==", "Max Mustermann").To(
 		New().Read("Marketplace"),
 	).To(
@@ -759,7 +759,7 @@ func review_TestbuildTestQueryJsonGetQbQueries(t *testing.T) {
 	)
 	printData(qry)
 
-	archivist.Info("Get Person that implemented marketplace")
+	fmt.Println("Get Person that implemented marketplace")
 	qry = New().Read("Marketplace").From(
 		New().Read("Person"),
 	)
@@ -877,7 +877,7 @@ func TestRequiredQueryJoinInDepthFail(t *testing.T) {
 	initStorage()
 	testdata := mapQbStructureMap()
 	testStorage.MapTransportData(testdata)
-	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	fmt.Println(" - - - - - - - - - Test required first level join  - - - - - - - - -")
 	qry := New().Read("Person").To(
 		New().Read("Marketplace").To(
 			New().Read("Person"),
@@ -896,7 +896,7 @@ func TestRequiredQueryJoinInDepthFail(t *testing.T) {
 func TestRequiredQueryJoinInDepthSuccess(t *testing.T) {
 	testdata := mapQbStructureMap()
 	testStorage.MapTransportData(testdata)
-	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	fmt.Println(" - - - - - - - - - Test required first level join  - - - - - - - - -")
 	qry := New().Read("Person").To(
 		New().Read("Marketplace").To(
 			New().Read("Country"),
@@ -914,7 +914,7 @@ func TestRequiredQueryJoinInDepthSuccess(t *testing.T) {
 
 func printData(data any) {
 	t, _ := json.MarshalIndent(data, "", "\t")
-	archivist.Info("Query Data Struct", string(t))
+	fmt.Println("Query Data Struct", string(t))
 }
 
 func mapQbStructureMap() transport.TransportEntity {
