@@ -1,4 +1,5 @@
 # Query Builder
+[back](INDEX.md)
 
 ## Index
 * [Overview](#overview)
@@ -70,7 +71,7 @@ In this examples we are assuming there is a instance created before starting to 
 ```go
 gitsInstance := gits.NewInstance("test")
 ```
-
+[top](#query-builder)
 ### 1. Simple Read Query
 ```go
 qry := gits.NewQuery().Read("Entity")
@@ -212,7 +213,7 @@ result := gitsInstance.ExecuteQuery(qry)
 This is a rather complex query showcasing some of the capabilities combined. The following visualisation should showcase the queries final structure, while at the same time show the possible result structure. Results will always be starting at the root query. The dark green queries will deliver a guaranteed result. Light green queries are optional and therefor might or might not be existent in a result. The blue queries are just modifying the results and will not be included in the results.
 ![complex read query visualisation](./IMAGES/complex_read_query_gits_fixed.png)
 
-
+[top](#query-builder)
 ## Definitions
 ### Supported Match Operators
 The following operators are supported in terms of matching actions.
@@ -230,5 +231,5 @@ The following operators are supported in terms of matching actions.
 | <=       | alpha is lower or equal to beta  | int                             | int       |
 | in       | if any alpha is equal to beta    | alpha is split by "," delimiter |           |
 
-
-[Documentation Overview](INDEX)
+[top](#query-builder)
+[Documentation Overview](INDEX.md)

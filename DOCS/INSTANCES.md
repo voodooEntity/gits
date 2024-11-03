@@ -82,3 +82,8 @@ A: Yes, you can not have two instance with the same name.
 
 Q: Why is the light blue
 A: .....
+
+
+
+[top](#instance-handling)
+[Documentation Overview](INDEX.md)
