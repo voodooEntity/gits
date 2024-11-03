@@ -141,21 +141,21 @@ The two major differences between the datasets are:
 * **MapTransportData(data transport.TransportEntity)**
   * Maps data ins transport.* format to storage. This method is exposed via an interface function directly by ur GITS instance [and documented here](./DATA_MAPPING.md).
   * **Returns:** *transport.TransportEntity*
-* **GetEntitiesByQueryFilter(...)**
+* **GetEntitiesByQueryFilter(typePool []string, conditions [][][3]string, idFilter [][]int, valueFilter [][]int, contextFilter [][]int, propertyList []map[string][]int, returnDataFlag bool)**
   * Retrieves entities based on a query filter.
-  * **Returns:** *...*
-* **GetEntitiesByQueryFilterAndSourceAddress(...)**
+  * **Returns:** *[]transport.TransportEntity, [][2]int, int*
+* **GetEntitiesByQueryFilterAndSourceAddress(typePool []string, conditions [][][3]string, idFilter [][]int, valueFilter [][]int, contextFilter [][]int, propertyList []map[string][]int, sourceAddress [2]int, direction int, returnDataFlag bool)**
   * Retrieves entities based on a query filter and source address.
-  * **Returns:** *...*
+  * **Returns:** *[]transport.TransportRelation, [][2]int, int*
 * **BatchUpdateAddressList(addressList [][2]int, values map[string]string)**
   * Batch updates addresses.
-  * **Returns:** *nil*
+  * **Returns:** *none*
 * **BatchDeleteAddressList(addressList [][2]int)**
   * Batch deletes addresses.
-  * **Returns:** *nil*
+  * **Returns:** *none*
 * **LinkAddressLists(from [][2]int, to [][2]int)**
   * Links address lists.
   * **Returns:** *int*
 * **TraverseEnrich(entity *transport.TransportEntity, direction int, depth int)**
   * Traverses and enriches an entity.
-  * **Returns:** *nil*
+  * **Returns:** *none*
