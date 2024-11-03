@@ -62,7 +62,7 @@ The two major differences between the datasets are:
   * **Returns:** *nil*
   * *Note: Has an unsafe counterpart.*
 
-[to top](./STORAGE_API.md)
+[to top](#storage-api)
 
 ### Relation Functions
 
@@ -111,7 +111,7 @@ The two major differences between the datasets are:
   * **Returns:** *map[int]types.StorageRelation, error*
   * *Note: Has an unsafe counterpart.*
 
-[to top](./STORAGE_API.md)
+[to top](#storage-api)
 
 ### Type and Entity Management
 
@@ -176,5 +176,5 @@ The two major differences between the datasets are:
   * Traverses and enriches an entity.
   * **Returns:** *none*
 
-[to top](./STORAGE_API.md)
+[to top](#storage-api)
 [Documentation Overview](INDEX.md)
