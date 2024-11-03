@@ -231,5 +231,5 @@ The following operators are supported in terms of matching actions.
 | <=       | alpha is lower or equal to beta  | int                             | int       |
 | in       | if any alpha is equal to beta    | alpha is split by "," delimiter |           |
 
-[top](#query-builder)
+[top](#query-builder) - 
 [Documentation Overview](INDEX.md)

@@ -159,5 +159,5 @@ Q: Is it possible to update an existing entity using MapData?
 A: No, MapData is only able to create new and/or map inbetween new and existing datasets. To update you either need to use a [query](QUERY.md) or directly the [storage api](STORAGE_API.md).
 
 
-[top](#creatingmapping-data)
+[top](#creatingmapping-data) - 
 [Documentation Overview](INDEX.md)

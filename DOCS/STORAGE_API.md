@@ -150,7 +150,7 @@ The two major differences between the datasets are:
   * Retrieves the number of entities of a specific type.
   * **Returns:** *int, error*
 
-[to top](./STORAGE_API.md)
+[to top](#storage-api)
 
 ### Additional Functions / Mainly build for query interpreter
 
@@ -176,5 +176,5 @@ The two major differences between the datasets are:
   * Traverses and enriches an entity.
   * **Returns:** *none*
 
-[to top](#storage-api)
+[to top](#storage-api) - 
 [Documentation Overview](INDEX.md)
