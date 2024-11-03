@@ -18,6 +18,7 @@
   * [12. Link entities](#12-link-entities)
   * [13. Unlink entities](#13-unlink-entities)
   * [14. Adjusting the result order](#14-adjusting-the-result-order)
+  * [15. Complex read query example](#15-complex-read-query-example)
 * [Definitions](#definitions)
   * [Supported Match Operators](#supported-match-operators)
 
