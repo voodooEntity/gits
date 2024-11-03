@@ -150,7 +150,7 @@ qry := gits.NewQuery().Link("EntityA").Match("Value", "==", "alpha").To(
 )
 gitsInstance.ExecuteQuery(qry)
 ```
-This query will find all entities of type "EntityA" which match "Value" equals "alpha" and link (create a directed relation) the result list to result of the join which matches entities of type "EntityB" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Link" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our link function. You can use this to link any amount of entities. Link query must always be a root level query. 
+This query will find all entities of type "EntityA" which match "Value" equals "alpha" and link (create a directed relation) the result list to result of the join which matches entities of type "EntityB" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Link" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our link function. You can use this to link any amount of entities. Link query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be created, it is not possible to use those as pure filter right now.  
 
 ### 13. Unlink entities
 ```go
@@ -159,7 +159,7 @@ qry := gits.NewQuery().Unlink("EntityA").Match("Value", "==", "alpha").To(
 )
 gitsInstance.ExecuteQuery(qry)
 ```
-This query will find all entities of type "EntityA" which match "Value" equals "alpha" and unlink (remove a directed relation) the result list to result of the join which matches entities of type "EntityB" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Unlink" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our unlink function. You can use this to unlink any amount of entities. Unlink query must always be a root level query.
+This query will find all entities of type "EntityA" which match "Value" equals "alpha" and unlink (remove a directed relation) the result list to result of the join which matches entities of type "EntityB" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Unlink" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our unlink function. You can use this to unlink any amount of entities. Unlink query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be deleted, it is not possible to use those as pure filter right now.
 
 ### 14. Adjusting the result order
 ```go
@@ -170,13 +170,30 @@ result := gitsInstance.ExecuteQuery(qry)
 ```
 This query will find all entities of type "EntityA" which are linked to entities of type "EntityB". Before returning the data, it will resort the order of the root level results by the field "Value" direction "ASC" (ascending) in mode "Alpha(numeric)". Order can only be applied on root level queries and will sort results only on root level results.
 
+### 15. Complex read query example
+```go
+qry := gits.NewQuery().Read("Entity").To(
+    gits.NewQuery().Reduce("EntityA").To(
+        gits.NewQuery().Reduce("EntityAA").Match("Properties.Example","==","this").OrMatch("Properties.Example","==","that")
+	),
+).To(
+    gits.NewQuery().Read("EntityB").Match("Context","!=","beta").TraverseOut(3),
+).CanFrom(
+    gits.NewQuery().Read("EntityZ").Match("Value","==","ipsum"),
+)
+result := gitsInstance.ExecuteQuery(qry)
+```
+This is a rather complex query showcasing some of the capabilities combined. The following visualisation should showcase the queries final structure, while at the same time show the possible result structure. Results will always be starting at the root query. The dark green queries will deliver a guaranteed result. Light green queries are optional and therefor might or might not be existent in a result. The blue queries are just modifying the results and will not be included in the results.
+![complex read query visualisation](./IMAGES/complex_read_query_gits.png)
+
+
 ## Definitions
 ### Supported Match Operators
 The following operators are supported in terms of matching actions.
 
 | Operator | Description                      | Alpha Cast                      | Beta Cast |
 |----------|----------------------------------|---------------------------------|-----------|
-| ==       | alpha euqals beta                |                                 |           |
+| ==       | alpha equals beta                |                                 |           |
 | !=       | alpha does not equal beta        |                                 |           |
 | prefix   | beta is prefix of alpha          |                                 |           |
 | suffix   | beta is suffix of alpha          |                                 |           |

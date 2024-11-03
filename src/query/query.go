@@ -391,7 +391,7 @@ func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddre
 	i := 0
 	for _, query := range queries {
 		var tmpRet []transport.TransportRelation
-		// parse the conditions into our 2 neccesary groups
+		// parse the conditions into our 2 necessary groups
 		baseMatchList, propertyMatchList := parseConditions(&query)
 
 		// do we need to return the data itself?
