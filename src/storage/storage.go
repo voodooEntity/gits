@@ -3,7 +3,6 @@ package storage
 // handle all the imports
 import (
 	"errors"
-	"github.com/voodooEntity/archivist"
 	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
 	"regexp"
@@ -2196,7 +2195,7 @@ func (s *Storage) LinkAddressLists(from [][2]int, to [][2]int) int {
 					TargetType: singleTo[0],
 					TargetID:   singleTo[1],
 				})
-				archivist.Debug("Creating link from to ", singleFrom[0], singleFrom[1], singleTo[0], singleTo[1])
+				// archivist.Debug("Creating link from to ", singleFrom[0], singleFrom[1], singleTo[0], singleTo[1])
 				linkedAmount++
 			}
 		}
@@ -2217,7 +2216,7 @@ func (s *Storage) TraverseEnrich(entity *transport.TransportEntity, direction in
 	if nil != err {
 		// source type entity type does not exist , can this even ever occure? Oo i dont know
 		// trying to solve this error that should die alot earlier but just to be sure ###todo review
-		archivist.Error("This should be impossible to hit - run you fools")
+		// archivist.Error("This should be impossible to hit - run you fools")
 		return
 	}
 
