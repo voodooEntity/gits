@@ -184,7 +184,7 @@ qry := gits.NewQuery().Read("Entity").To(
 result := gitsInstance.ExecuteQuery(qry)
 ```
 This is a rather complex query showcasing some of the capabilities combined. The following visualisation should showcase the queries final structure, while at the same time show the possible result structure. Results will always be starting at the root query. The dark green queries will deliver a guaranteed result. Light green queries are optional and therefor might or might not be existent in a result. The blue queries are just modifying the results and will not be included in the results.
-![complex read query visualisation](./IMAGES/complex_read_query_gits.png)
+![complex read query visualisation](./IMAGES/complex_read_query_gits_fixed.png)
 
 
 ## Definitions
