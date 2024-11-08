@@ -519,86 +519,629 @@ This query reads all entities of type "Alpha" and their parent linked "Beta" ent
 
 ### 10. Simple Optional Child Join:
 ```go
-qry := qa.New().Read("EntityA").CanTo(qa.New().Read("EntityB"))
+qry := qa.New().Read("Alpha").CanTo(qa.New().Read("Beta"))
 result := qa.Execute(qry)
 ```
-This query reads all entities of type "EntityA" and their, if existent, child linked "EntityB" entities. "CanTo" is a "optional" call which means there can be linked entities but its not required.
+This query reads all entities of type "Alpha" and their, if existent, child linked "Beta" entities. "CanTo" is a "optional" call which means there can be linked entities but its not required.
 ```json
-
+{
+  "Entities": [
+    {
+      "Type": "Alpha",
+      "ID": 1,
+      "Value": "some",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Beta",
+            "ID": 1,
+            "Value": "thing",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [],
+            "ParentRelations": []
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        },
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Beta",
+            "ID": 2,
+            "Value": "else",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [],
+            "ParentRelations": []
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        }
+      ],
+      "ParentRelations": []
+    },
+    {
+      "Type": "Alpha",
+      "ID": 2,
+      "Value": "Well",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [],
+      "ParentRelations": []
+    },
+    {
+      "Type": "Alpha",
+      "ID": 3,
+      "Value": "Done",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [],
+      "ParentRelations": []
+    }
+  ],
+  "Relations": null,
+  "Amount": 3
+}
 ```
 
 ### 11. Simple Optional Parent Join:
 ```go
-qry := qa.New().Read("EntityA").CanFrom(qa.New().Read("EntityB"))
+qry := qa.New().Read("Alpha").CanFrom(qa.New().Read("Beta"))
 result := qa.Execute(qry)
 ```
-This query reads all entities of type "EntityA" and their, if existent, parent linked "EntityB" entities. "CanFrom" is a "optional" call which means there can be linked entities but its not required.
+This query reads all entities of type "Alpha" and their, if existent, parent linked "Beta" entities. "CanFrom" is a "optional" call which means there can be linked entities but its not required.
 ```json
-
+{
+  "Entities": [
+    {
+      "Type": "Alpha",
+      "ID": 1,
+      "Value": "some",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [],
+      "ParentRelations": [
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Beta",
+            "ID": 1,
+            "Value": "thing",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [],
+            "ParentRelations": []
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        },
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Beta",
+            "ID": 2,
+            "Value": "else",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [],
+            "ParentRelations": []
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        }
+      ]
+    },
+    {
+      "Type": "Alpha",
+      "ID": 2,
+      "Value": "Well",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [],
+      "ParentRelations": []
+    },
+    {
+      "Type": "Alpha",
+      "ID": 3,
+      "Value": "Done",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [],
+      "ParentRelations": []
+    }
+  ],
+  "Relations": null,
+  "Amount": 3
+}
 ```
 
-### 12. Filtered Join:
+### 12. Zigzag Join
 ```go
-qry := qa.New().Read("EntityA").To(qa.New().Read("EntityB").Match("Value", "==", "someValue"))
+qry := qa.New().Read("Alpha").To(qa.New().Read("Beta").From(qa.New().Read("Gamma")))
 result := qa.Execute(qry)
 ```
-This query reads all entities of type "EntityA" and their linked "EntityB" entities where the "EntityB" entities have a "Value" property equal to "someValue".
+This query will read all entities of type "Alpha" and their child linked "Beta" which than are linked to "Gamma". This should showcase how "joins" can be nested.
 ```json
-
+{
+  "Entities": [
+    {
+      "Type": "Alpha",
+      "ID": 1,
+      "Value": "some",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Beta",
+            "ID": 1,
+            "Value": "thing",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [],
+            "ParentRelations": [
+              {
+                "Context": "",
+                "Properties": null,
+                "Target": {
+                  "Type": "Gamma",
+                  "ID": 1,
+                  "Value": "thatsit",
+                  "Context": "",
+                  "Version": 1,
+                  "Properties": {},
+                  "ChildRelations": [],
+                  "ParentRelations": []
+                },
+                "SourceType": "",
+                "SourceID": 0,
+                "TargetType": "",
+                "TargetID": 0,
+                "Version": 0
+              }
+            ]
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        }
+      ],
+      "ParentRelations": []
+    }
+  ],
+  "Relations": null,
+  "Amount": 1
+}
 ```
 
-### 13. Traversing out:
+### 13. Filtered Join:
 ```go
-qry := qa.New().Read("Entity").TraverseOut(3)
+qry := qa.New().Read("Alpha").To(qa.New().Read("Beta").Match("Value", "==", "someValue"))
+result := qa.Execute(qry)
+```
+This query reads all entities of type "Alpha" and their linked "Beta" entities where the "Beta" entities have a "Value" property equal to "someValue".
+```json
+{
+  "Entities": [
+    {
+      "Type": "Alpha",
+      "ID": 1,
+      "Value": "some",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Beta",
+            "ID": 1,
+            "Value": "someValue",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [],
+            "ParentRelations": []
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        }
+      ],
+      "ParentRelations": []
+    }
+  ],
+  "Relations": null,
+  "Amount": 1
+}
+```
+
+### 14. Traversing out:
+```go
+qry := qa.New().Read("Alpha").TraverseOut(3)
 result := qa.Execute(qry)
 ```
 This query reads all entities of type "Entity", than it will traverse out (follow relations towards children) up to a depth of 3. Can be especially useful in abstract structures where properties are handled as child entities or abstracts without static structural definitions. Traverse is supported towards children "TraverseOut" and parents "TraverseIn". 
 ```json
-
+{
+  "Entities": [
+    {
+      "Type": "Alpha",
+      "ID": 1,
+      "Value": "never",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Osa",
+            "ID": 1,
+            "Value": "down",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": null,
+            "ParentRelations": null
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        },
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Gamma",
+            "ID": 1,
+            "Value": "gonne",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [
+              {
+                "Context": "",
+                "Properties": null,
+                "Target": {
+                  "Type": "Epsilon",
+                  "ID": 1,
+                  "Value": "give",
+                  "Context": "",
+                  "Version": 1,
+                  "Properties": {},
+                  "ChildRelations": [
+                    {
+                      "Context": "",
+                      "Properties": null,
+                      "Target": {
+                        "Type": "Psi",
+                        "ID": 1,
+                        "Value": "you",
+                        "Context": "",
+                        "Version": 1,
+                        "Properties": {},
+                        "ChildRelations": null,
+                        "ParentRelations": null
+                      },
+                      "SourceType": "",
+                      "SourceID": 0,
+                      "TargetType": "",
+                      "TargetID": 0,
+                      "Version": 0
+                    },
+                    {
+                      "Context": "",
+                      "Properties": null,
+                      "Target": {
+                        "Type": "Poi",
+                        "ID": 1,
+                        "Value": "up",
+                        "Context": "",
+                        "Version": 1,
+                        "Properties": {},
+                        "ChildRelations": null,
+                        "ParentRelations": null
+                      },
+                      "SourceType": "",
+                      "SourceID": 0,
+                      "TargetType": "",
+                      "TargetID": 0,
+                      "Version": 0
+                    }
+                  ],
+                  "ParentRelations": null
+                },
+                "SourceType": "",
+                "SourceID": 0,
+                "TargetType": "",
+                "TargetID": 0,
+                "Version": 0
+              }
+            ],
+            "ParentRelations": null
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        },
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Beta",
+            "ID": 1,
+            "Value": "never",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [
+              {
+                "Context": "",
+                "Properties": null,
+                "Target": {
+                  "Type": "Foo",
+                  "ID": 1,
+                  "Value": "gonne",
+                  "Context": "",
+                  "Version": 1,
+                  "Properties": {},
+                  "ChildRelations": null,
+                  "ParentRelations": null
+                },
+                "SourceType": "",
+                "SourceID": 0,
+                "TargetType": "",
+                "TargetID": 0,
+                "Version": 0
+              },
+              {
+                "Context": "",
+                "Properties": null,
+                "Target": {
+                  "Type": "Bar",
+                  "ID": 1,
+                  "Value": "let",
+                  "Context": "",
+                  "Version": 1,
+                  "Properties": {},
+                  "ChildRelations": null,
+                  "ParentRelations": null
+                },
+                "SourceType": "",
+                "SourceID": 0,
+                "TargetType": "",
+                "TargetID": 0,
+                "Version": 0
+              }
+            ],
+            "ParentRelations": null
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        },
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Kato",
+            "ID": 1,
+            "Value": "you",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": null,
+            "ParentRelations": null
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        }
+      ],
+      "ParentRelations": []
+    }
+  ],
+  "Relations": null,
+  "Amount": 1
+}
 ```
 
-### 14. Update entities
+### 15. Update entities
 ```go
-qry := qa.New().Update("Entity").Match("Value","==","old").Set("Value", "Lorem").Set("Context", "Ipsum").Set("Properties.dolor","appropinquare")
-result := gitsInstance.Execute(qry)
-```
-This query will update all entities of type "Entity" which match ("Value" equals "old"). It will update "Context" to "Ipsum", "Value" to "Lorem" and the Property "dolor" to "appropinquare". This can affect a single or multiple entities, based on your filters. Update query must always be a root level query. Update can be used with "(Can)To" and "(Can)From" in order to reduce/filter the affected datasets. It is recommended to use "Reduce()" instead of "Read()" in such subqueries to minimize the amount of allocated memory.
-
-### 15 Delete entities
-```go
-qry := qa.New().Delete("Entity").Match("Value", "==", "deleteme")
-result := gitsInstance.Execute(qry)
-```
-This query will delete all entities of type "Entity" which match ("Value" equals "deleteme"). This can affect a single or multiple entities, based on your filters. Delete query must always be a root level query. Delete can be used with "(Can)To" and "(Can)From" in order to reduce/filter the affected datasets. It is recommended to use "Reduce()" instead of "Read()" in joins to minimize the amount of allocated memory.
-
-### 16. Link entities
-```go
-qry := qa.New().Link("EntityA").Match("Value", "==", "alpha").To(
-    qa.New().Find("EntityB").Match("Value", "==", "omega"),
-)
-qa.Execute(qry)
-```
-This query will find all entities of type "EntityA" which match "Value" equals "alpha" and link (create a directed relation) the result list to result of the join which matches entities of type "EntityB" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Link" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our link function. You can use this to link any amount of entities. Link query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be created, it is not possible to use those as pure filter right now.  
-
-### 17. Unlink entities
-```go
-qry := qa.New().Unlink("EntityA").Match("Value", "==", "alpha").To(
-    qa.New().Find("EntityB").Match("Value", "==", "omega"),
-)
-qa.Execute(qry)
-```
-This query will find all entities of type "EntityA" which match "Value" equals "alpha" and unlink (remove a directed relation) the result list to result of the join which matches entities of type "EntityB" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Unlink" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our unlink function. You can use this to unlink any amount of entities. Unlink query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be deleted, it is not possible to use those as pure filter right now.
-
-### 18. Adjusting the result order
-```go
-qry := qa.New().Read("EntityA").To(
-    qa.New().Read("EntityB"),
-).Order("Value", ORDER_DIRECTION_ASC, ORDER_MODE_ALPHA)
+qry := qa.New().Update("Alpha").Match("Value","==","old").Set("Value", "Lorem").Set("Context", "Ipsum").Set("Properties.dolor","appropinquare")
 result := qa.Execute(qry)
 ```
-This query will find all entities of type "EntityA" which are linked to entities of type "EntityB". Before returning the data, it will resort the order of the root level results by the field "Value" direction "ASC" (ascending) in mode "Alpha(numeric)". Order can only be applied on root level queries and will sort results only on root level results.
+This query will update all entities of type "Alpha" which match ("Value" equals "old"). It will update "Context" to "Ipsum", "Value" to "Lorem" and the Property "dolor" to "appropinquare". This can affect a single or multiple entities, based on your filters. Update query must always be a root level query. Update can be used with "(Can)To" and "(Can)From" in order to reduce/filter the affected datasets. It is recommended to use "Reduce()" instead of "Read()" in such subqueries to minimize the amount of allocated memory.
+```json
+// an update query will not return any entity datasets. The amount indicates 
+// the amount of updated datasets 
+{
+  "Entities": null,
+  "Relations": null,
+  "Amount": 1
+}
+```
 
-### 19. Complex read query example
+### 16 Delete entities
+```go
+qry := qa.New().Delete("Alpha").Match("Context", "==", "deleteme")
+result := qa.Execute(qry)
+```
+This query will delete all entities of type "Alpha" which match ("Context" equals "deleteme"). This can affect a single or multiple entities, based on your filters. Delete query must always be a root level query. Delete can be used with "(Can)To" and "(Can)From" in order to reduce/filter the affected datasets. It is recommended to use "Reduce()" instead of "Read()" in joins to minimize the amount of allocated memory.
+```json
+// a delete query will not return any entity datasets. The amount indicates 
+// the amount of deleted datasets 
+{
+  "Entities": null,
+  "Relations": null,
+  "Amount": 2
+}
+```
+
+### 17. Link entities
+```go
+qry := qa.New().Link("Alpha").Match("Value", "==", "psi").To(
+    qa.New().Find("Beta").Match("Value", "==", "omega"),
+)
+qa.Execute(qry)
+```
+This query will find all entities of type "Alpha" which match "Value" equals "psi" and link (create a directed relation) the result list to result of the join which matches entities of type "Beta" with "Value" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Link" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our link function. You can use this to link any amount of entities. Link query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be created, it is not possible to use those as pure filter right now.  
+```json
+// a link query will not return any entity datasets. The amount indicates 
+// the amount of source datasets on root level that have been linked  
+{
+  "Entities": null,
+  "Relations": null,
+  "Amount": 1
+}
+```
+
+
+### 18. Unlink entities
+```go
+qry := qa.New().Unlink("Alpha").Match("Value", "==", "psi").To(
+    qa.New().Find("Beta").Match("Context", "==", "omega"),
+)
+qa.Execute(qry)
+```
+This query will find all entities of type "Alpha" which match "Value" equals "psi" and unlink (remove a directed relation) the result list to result of the join which matches entities of type "Beta" with "Context" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Unlink" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our unlink function. You can use this to unlink any amount of entities. Unlink query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be deleted, it is not possible to use those as pure filter right now.
+```json
+// an unlink query will not return any entity datasets. The amount indicates 
+// the amount of target datasets that have been unlinked  
+{
+  "Entities": null,
+  "Relations": null,
+  "Amount": 2
+}
+```
+
+
+### 19. Adjusting the result order
+```go
+qry := qa.New().Read("Alpha").Order("Properties.Psi", qa.ORDER_DIRECTION_ASC, qa.ODER_MODE_NUM)
+result := qa.Execute(qry)
+```
+This query will find all entities of type "Alpha". Before returning the data, it will resort the order of the root level results by the field "Properties.Psi" direction "ASC" (ascending) in mode "ORDER_MODE_NUMERIC". Order can only be applied on root level queries and will sort results only on root level results.
+```json
+{
+  "Entities": [
+    {
+      "Type": "Alpha",
+      "ID": 4,
+      "Value": "never",
+      "Context": "",
+      "Version": 1,
+      "Properties": {
+        "Psi": "1"
+      },
+      "ChildRelations": [],
+      "ParentRelations": []
+    },
+    {
+      "Type": "Alpha",
+      "ID": 1,
+      "Value": "gonne",
+      "Context": "",
+      "Version": 1,
+      "Properties": {
+        "Psi": "2"
+      },
+      "ChildRelations": [],
+      "ParentRelations": []
+    },
+    {
+      "Type": "Alpha",
+      "ID": 3,
+      "Value": "give",
+      "Context": "",
+      "Version": 1,
+      "Properties": {
+        "Psi": "3"
+      },
+      "ChildRelations": [],
+      "ParentRelations": []
+    },
+    {
+      "Type": "Alpha",
+      "ID": 5,
+      "Value": "you",
+      "Context": "",
+      "Version": 1,
+      "Properties": {
+        "Psi": "4"
+      },
+      "ChildRelations": [],
+      "ParentRelations": []
+    },
+    {
+      "Type": "Alpha",
+      "ID": 2,
+      "Value": "up",
+      "Context": "",
+      "Version": 1,
+      "Properties": {
+        "Psi": "5"
+      },
+      "ChildRelations": [],
+      "ParentRelations": []
+    }
+  ],
+  "Relations": null,
+  "Amount": 5
+}
+```
+
+
+### 20. Complex read query example
 ```go
 qry := qa.New().Read("Entity").To(
     qa.New().Reduce("EntityA").To(
