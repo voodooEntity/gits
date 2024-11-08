@@ -53,7 +53,7 @@ The following use cases are example either applications in which i used GITS or 
 ### Setup
 Since GITS is a library, the setup is really simple and only consists of requiring GITS into your existing go project
 ```bash
-go get github.com/voodooEntity/gits@0.8.0
+go get github.com/voodooEntity/gits@0.9.1
 ```
 
 ### Usage
