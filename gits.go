@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-var instances instanceIndex
+var instances = make(instanceIndex)
 var instanceMutex = &sync.RWMutex{}
 var defaultInstance *Gits
 
@@ -61,6 +61,24 @@ func (g *Gits) ExecuteQuery(qry *query.Query) transport.Transport {
 
 func (g *Gits) MapData(data transport.TransportEntity) transport.TransportEntity {
 	return g.storage.MapTransportData(data)
+}
+
+func (g *Gits) Query() *QueryAdapter {
+	return &QueryAdapter{
+		storage: g.storage,
+	}
+}
+
+type QueryAdapter struct {
+	storage *storage.Storage
+}
+
+func (qa *QueryAdapter) New() *query.Query {
+	return query.New()
+}
+
+func (qa *QueryAdapter) Execute(qry *query.Query) transport.Transport {
+	return query.Execute(qa.storage, qry)
 }
 
 type instanceIndex map[string]*Gits

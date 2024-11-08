@@ -15,7 +15,7 @@
   <a href="#use-cases">Use Cases</a> •
   <a href="#how-to-use">How To Use</a> •
   <a href="#roadmap">Roadmap</a> •
-  <a href="DOCS/INDEX.md">Documentation</a> •
+  <a href="DOCS/README.md">Documentation</a> •
   <a href="#license">License</a>
 </p>
 
@@ -27,24 +27,24 @@
 - Simple builder based query language (json compatible)
 - Supports multiple parallel storages (factory)
 - Global accessibility of storage index
-- Small dependency footprint (using only my own libraries)
+- No third party dependencies
 - Option to map nested structures at once (json compatible)
 
 
 ## About
-<span style="color:#35b9e9">GITS</span> has been developed in order to enable developers to use complex data structures in their golang applications. Due to the nature of <span style="color:#35b9e9">GITS</span> handling all storage and operations in memory, it allows for very fast processing of large amounts of datasets and structures. The library also is designed for multithreading purposes and therefor full concurrency safe. While providing a simple  query interface, which probably suits most of the use cases, <span style="color:#35b9e9">GITS</span> also exposes the storage API so the developer can optimize his application without any restrictions.
+<span style="color:#35b9e9">GITS</span> has been developed in order to enable developers to easily handle complex data structures in their golang applications without having to worry about concurrency. Due to the nature of <span style="color:#35b9e9">GITS</span> handling all storage and operations in memory, it allows for very fast processing of large amounts of datasets and structures. The library also is designed for multithreading purposes and therefor full concurrency safe. While providing a simple  query interface, which probably suits most of the use cases, <span style="color:#35b9e9">GITS</span> also exposes the storage API so the developer can optimize his application without any restrictions.
 
 ## Use Cases
-The following use cases are example either of applications in which i used GITS or ideas that came to my mind in which using GITS could be beneficial. Apart from that, GITS can be used in any environment that can benefit from the features it provides.
+The following use cases are example either applications in which i used GITS or ideas that came to my mind in which using GITS could be beneficial. Apart from that, GITS can be used in any environment that can benefit from the features it provides.
 
 - Corona Dashboard
-  - Back in the main phase of corona i created my own dashboard hosting and showing the current infection/etc statistics for countries/states/ and other subnational units. This data was fully kept in memory till i hit my servers limits (20gb ~). 
+  - Back in the main phase of corona i created my own dashboard hosting and showing the current infection/etc statistics for countries/states/ and other subnational units. A crawler collected information from official sources at an hourly rate and mapped them into the storage. This data was fully kept in memory till i hit my servers limits (20gb ~). 
 - Webcrawler
   - Due to GITS offering the mapping of data in graph structure, you can create complex networks - in this case websites/pages and the interlinking in between those. Due to the index being in memory - lookups for already existing entries and such are very fast. 
 - File importer
   - You got a very large XML export with different nested sections and ID relations in between those. You can easily use GITS to map the data and than simply retrieve the complete structures for exporting/processing instead of having to use multiple lookups every time.
 - NFT trader
-  - GITS was used to keep track of NFT trading transactions and evaluate possible arbitrary trades based on the data kept in memory. 
+  - GITS was used to keep track of NFT trading transactions and evaluate possible arbitrary trades based on the data kept in memory. Since such arbitrary trading is very time sensitive, an in memory storage was optimal. 
 - go-cyberbrain
   - A longterm project of myself (which i initially created SlingshotDB for). It's a processing/computing framework which allows for self supervising/automated processing of data.  
 
@@ -92,9 +92,9 @@ Also, since GITS is a graph structured storage, it by default has includes the a
 
 
 ### Create new data
-To make creating new data as easy as possible, GITS provides the "MapTransport" method which only needs to be provided with an instance of transport.TransportEntity and will take care of the rest. 
+To make creating new data as easy as possible, GITS provides the "MapData" method which only needs to be provided with an instance of transport.TransportEntity and will take care of the rest. 
 ```go
-rootIntID := myGitsInstance.MapTransport(transport.TransportEntity{
+rootIntID := myGitsInstance.MapData(transport.TransportEntity{
 		ID:    storage.MAP_FORCE_CREATE,
 		Type:  "Alpha",
 		Value: "Something",
@@ -120,21 +120,22 @@ The most simple way to access data in a GITS storage is to use the inbuilt query
 
 An example of how to use it to read the previously mapped data
 ```go
-// Retrieve a query builder, since the query builder is unrelated to a storage
-// the method is available globally
-myQueryBuilder := gits.GetQueryBuilder()
+// Retrieve a query adapter instance. while its not required to store the adapter 
+// (you may also just always use myGitsInstance.Query() before calling query methods) 
+// it might be handy to reduce the amount of typing
+qryAdapter := myGitsInstance.Query()
 
 // now we create a query to read the desired data
-finalQuery := myQueryBuilder.Read("Alpha").Match("Value","==","Something").To(
-	    gits.GetQueryBuilder().Read("Beta").Match("Value","==","Else")
+finalQuery := qryAdapter.New().Read("Alpha").Match("Value","==","Something").To(
+	    qryAdapter.New().Read("Beta").Match("Value","==","Else")
 	)
 
 // finally we execute the query to retrieve the results. ExecuteQuery 
 // is called on the previously created instance of *gits.Gits 
-result := myGitsInstance.ExecuteQuery(finalQuery)
+result := qryAdapter.Execute(finalQuery)
 ```
 
-For more information please refer to "Query Language Reference and Examples" addlink
+For more information please refer to ["Query Language Reference and Examples"](DOCS/QUERY.md)
 
 
 ### Use store API
@@ -149,37 +150,32 @@ and afterwards you can interact with the storage directly
 allEntityTypes := storageInstance.GetEntityTypes()
 ```
 
-For more information please refer to "Storage API Reference and Examples" addlink
+For more information please refer to ["Storage API Reference and Examples"](DOCS/STORAGE_API.md)
 
 
 ## Roadmap
-Right now im at a point of major restructuring. GITS, which initially started as a standalone database (SlingshotDB) and transformed into a library - is undergoing a probably final big restructuring. 
+The following list contains topics that will be the focus of future major updates. This list is not ordered. 
 
-While in its initial form GITS was planned as one big storage, the library has been adjusted to provide as many storages as you need as part of the Restructuring Part 1. In this step the original form of persistence (custom) has been kicked out. While the persistence was working fine, keeping it up to date turned out to be to much of a "sideproject" that i decided to remove it. 
-
-Instead, work towards an implementation that allows storages like mysql, pgsql etc to be used by a simple plugin system - this will be part of Restructuring Part 2. These two major steps in reforming GITS should allow it to be even more modular and finally simplify the "interface" on how to be used. 
-
-These two Restructuring projects are priority above other optimizations. 
-
-
-- [x] Restructure Part 1
-  - Enable multiple storages due to factory pattern
-  - Add a global tracking of storages and easy accessibility
-  - Move storage storage.go package and make gits.go the main interface
-  - Add simple interface in gits.go to enable query'ing and storage access
-  - Remove old persistence implementation
-  - Adjust README.md and add more necessary documents for full documentation
-- [ ] Restructure Part 2
-  - Add CHANGELOG.md
-  - Implement plugin based persistence system
-  - Add config system for persistence etc.
-  - Adjust logger used to standard format
+- [ ] Enhance query capabilities
+  - Right now the query builder/language has certain limitations especially in context of methods like "Link","Unlink" and the possibilities to create complex Match(Filter) conditions. This should be enhanced by reworking the query parser and enhancing the query.Query functionality.
+  - The current return format for linked data is nested struct instances. While this is very comfortable to work with, it also has certain limitations. Therefor it should also be possible to get the return in a flat format.
 - [ ] Enhance test coverage
+  - As for now, only the query builder/parser is fully tested. This should be extended to cover as much code as (usefully) possible.
+- [ ] Reimplement data persistence capabilities
+  - In the past GITS had an in-build custom persistence storage which has been removed. Instead there should be the option to add an adapter for existing persistent storages like pg, mysql or any other. 
 
 
 ## Changelog
+### Latest Release Changes
+* Massive restructuring of gits in order to make it more accessible and easier to get into for newcomers. This changes are leading towards the first stabled release and include:
+  * Enable multiple storages due to factory pattern
+  * Add a global tracking of storages and easy accessibility
+  * Move the storage to storage.go package and make gits.go the main interface
+  * Add simple interface in gits.go to enable query'ing and storage access
+  * Remove old persistence implementation
+  * Rework README.md and add [full Documentation](./DOCS/README.md)
 
-coming soon
+[Full Changelog](CHANGELOG.md) - [Latest Release]()
 
 ## License
 [Apache License Version 2.0](./LICENSE)

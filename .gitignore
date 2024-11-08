@@ -1,3 +1,4 @@
 cmd/
 cmd/*
 .idea
+src/storage/storage_test.go

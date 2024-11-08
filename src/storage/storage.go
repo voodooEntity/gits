@@ -3,6 +3,7 @@ package storage
 // handle all the imports
 import (
 	"errors"
+	"fmt"
 	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
 	"regexp"
@@ -1990,6 +1991,10 @@ func (s *Storage) GetEntitiesByQueryFilter(
 								contGroupLoop = true // ### refactor this i dont like it a bit but dont see a better way right now
 								break
 							}
+						} else {
+							// property does not exist
+							contGroupLoop = true
+							break
 						}
 					}
 					// ### we broke out of the inner loop means we have to continue the condition loop
@@ -2107,6 +2112,10 @@ func (s *Storage) GetEntitiesByQueryFilterAndSourceAddress(
 								contGroupLoop = true // ### refactor this i dont like it a bit but dont see a better way right now
 								break
 							}
+						} else {
+							// property does not exist
+							contGroupLoop = true
+							break
 						}
 					}
 					// ### we broke out of the inner loop means we have to continue the condition loop
@@ -2318,6 +2327,7 @@ func (s *Storage) getRRelationTargetIDsBySourceAddressAndTargetType(sourceType i
 
 func (s *Storage) matchGroup(filterGroup []int, conditions [][3]string, test string) bool {
 	for _, filterGroupID := range filterGroup {
+		fmt.Println(test, conditions[filterGroupID][1], conditions[filterGroupID][2])
 		if !s.match(test, conditions[filterGroupID][1], conditions[filterGroupID][2]) {
 			return false
 		}

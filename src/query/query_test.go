@@ -419,7 +419,7 @@ func TestFindValidTokenRequest(t *testing.T) {
 		},
 	})
 	qry := New().Read("User").Match("Value", "==", "testuser").To(
-		New().Read("Token").Match("Value", "==", "findme").Match("Properties.Context", "==", "TestABC"),
+		New().Read("Token").Match("Value", "==", "findme").Match("Context", "==", "TestABC"),
 	)
 	ret := Execute(testStorage, qry)
 	fmt.Println("data return", ret)

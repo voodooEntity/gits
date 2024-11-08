@@ -243,4 +243,4 @@ type Transport struct {
 By understanding this core structure, you can effectively utilize the storage system to model complex data relationships and perform efficient queries and updates.
 
 [to top](#storage-architecture) - 
-[Docuemntation Overview](./INDEX.md)
+[Docuemntation Overview](./README)
