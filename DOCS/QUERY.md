@@ -69,11 +69,21 @@ The GITS Query Language is a custom implementation optimized for the usage with 
 In the next step, we will provide practical examples to illustrate how to use these methods to construct complex queries. The query return prints will be in json format for practical reasons.
 
 ## Examples and Usage
-In this examples we are assuming there is a instance created and a query adapter retrieved.
+Using the [GITS instance](INSTANCES.md) a QueryAdapter can be retrieved. This query adapter offers multiple functions in order to work with the query builder.
 ```go
+// First we create a storage instance
 gitsInstance := gits.NewInstance("test")
+
+// Than we store the *gits.QueryAdapter for later usage
 qa := gitsInstance.Query()
+
+// The adapter offers the possibilitiy to get a query builder using
+qry := qa.New() //.Read(..).Match(..)...
+
+// The final query created with the builder can than be executed using
+result := qa.Execute(qry)
 ```
+
 [top](#query-builder)
 ### 1. Simple Read Query
 ```go

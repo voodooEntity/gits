@@ -51,13 +51,15 @@ The following use cases are example either applications in which i used GITS or 
 
 ## How to use
 ### Setup
-The setup is really simple and only consists of requiring the library into your existing go project
+Since GITS is a library, the setup is really simple and only consists of requiring GITS into your existing go project
 ```bash
 go get github.com/voodooEntity/gits@0.8.0
 ```
 
+### Usage
+The following examples provide a sneak peak into the usage of GITS. For a more detailed overview please [visit the documentation](DOCS/README.md).
 
-### Create an instance
+#### Create an instance
 To use GITS first we need to create a new instance
 ```go
 myGitsInstance := gits.NewInstance("main")
@@ -68,7 +70,7 @@ GITS also keeps track of all storages. The first created storage will always be 
 
 You are free to create as many instances of GITS as you like, in the following examples we are going to focus on having one storage to work with.
 
-### Datasets
+#### Datasets
 A dataset in GITS is considered an entity, or in graph speech a "node/vertice". When interacting with the data mapping function or query results, the type of structure used is the transport.TransportEntity
 ```go
 type TransportEntity struct {
@@ -88,10 +90,21 @@ While providing a Value:string field to store data, it also holds a Context:stri
 
 This format is mainly used for input/output purposes and the actual stored dataset (types.StorageEntity) is a lot smaller. You will only encounter instances of said type when directly interacting with the storage API.
 
-Also, since GITS is a graph structured storage, it by default has includes the ability to link any dataset with what we call a "relation" or in graph speech an "edge".
+Also, since GITS is a graph structured storage, it by default has includes the ability to link any dataset with what we call a "relation" or in graph speech an "edge". Such a relation is structured as following
+```go
+type TransportRelation struct {
+  Context    string
+  Properties map[string]string
+  Target     TransportEntity
+  SourceType string
+  SourceID   int
+  TargetType string
+  TargetID   int
+  Version    int
+}
+```
 
-
-### Create new data
+#### Create new data
 To make creating new data as easy as possible, GITS provides the "MapData" method which only needs to be provided with an instance of transport.TransportEntity and will take care of the rest. 
 ```go
 rootIntID := myGitsInstance.MapData(transport.TransportEntity{
@@ -115,7 +128,7 @@ As you can see in the example, we are passing a nested structure to the MapTrans
 
 For more detailed information on the capabilities of MapTransport please check "MapTransport Examples & Details" addlink
 
-### Use the Query language
+#### Use the Query language
 The most simple way to access data in a GITS storage is to use the inbuilt query language builder. While the GITS custom query builder options may be limited, they include the most important options to cover a wide range of use cases. 
 
 An example of how to use it to read the previously mapped data
@@ -127,8 +140,8 @@ qryAdapter := myGitsInstance.Query()
 
 // now we create a query to read the desired data
 finalQuery := qryAdapter.New().Read("Alpha").Match("Value","==","Something").To(
-	    qryAdapter.New().Read("Beta").Match("Value","==","Else")
-	)
+    qryAdapter.New().Read("Beta").Match("Value","==","Else"),
+)
 
 // finally we execute the query to retrieve the results. ExecuteQuery 
 // is called on the previously created instance of *gits.Gits 
@@ -138,7 +151,7 @@ result := qryAdapter.Execute(finalQuery)
 For more information please refer to ["Query Language Reference and Examples"](DOCS/QUERY.md)
 
 
-### Use store API
+#### Use store API
 While it is recommended to primary use the query language when accessing the storage, you are always able to directly interact with the storage.
 
 To access the storage you simply call
