@@ -67,14 +67,6 @@ So you basically can always access your storages from wherever you want by addre
 
 The system is designed to keep you as free in your choice of usage as possible.
 
-Finally there is the method
-```go
-gits.GetQueryBuilder()
-```
-as the name already suggests this method is part of the query topic. The method is exposed directly since there is no direct relation between a query instance and a storage before the actual execution. 
-
-Please refer to [Query Builder / Language](QUERY.md) on the actual usage of this method.
-
 
 ## FAQ
 Q: Are instance names unique?
