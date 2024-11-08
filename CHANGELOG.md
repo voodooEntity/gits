@@ -8,6 +8,9 @@
   * Add simple interface in gits.go to enable query'ing and storage access
   * Remove old persistence implementation
   * Rework README.md and add [full Documentation](./DOCS/README.md)
+* Bugfixes
+  * Fixing an issue on which a array out of index error could occure on nested Reduce() queries
+  * Adjusting Match() and OrMatch() when used with "Properties." to require the results to have the searched Property name.
 
 ## Small Bugfix Latest `6.8.2024`
 * Introducing a temporary variable when running recursive queries to collect tmpResultAddresses and adding them afterwards to the total list in order to prevent exponential allocation of addresses - in certain cases this could result in the application using extreme amounts of memory.

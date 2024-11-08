@@ -187,6 +187,9 @@ The following list contains topics that will be the focus of future major update
   * Add simple interface in gits.go to enable query'ing and storage access
   * Remove old persistence implementation
   * Rework README.md and add [full Documentation](./DOCS/README.md)
+* Bugfixes
+  * Fixing an issue on which a array out of index error could occure on nested Reduce() queries
+  * Adjusting Match() and OrMatch() when used with "Properties." to require the results to have the searched Property name.
 
 [Full Changelog](CHANGELOG.md) - [Latest Release]()
 
