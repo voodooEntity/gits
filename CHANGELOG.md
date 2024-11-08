@@ -1,6 +1,6 @@
 # Changelog
 
-## Major restructuring : 0.9.0  `8.11.2024`
+## Major restructuring : 0.9.1  `8.11.2024`
 * Massive restructuring of gits in order to make it more accessible and easier to get into for newcomers. This changes are leading towards the first stabled release and include:
   * Enable multiple storages due to factory pattern
   * Add a global tracking of storages and easy accessibility
