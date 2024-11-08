@@ -190,6 +190,7 @@ The following list contains topics that will be the focus of future major update
 * Bugfixes
   * Fixing an issue on which a array out of index error could occure on nested Reduce() queries
   * Adjusting Match() and OrMatch() when used with "Properties." to require the results to have the searched Property name.
+  * Bugfix addresslist memory exception 
 
 [Full Changelog](CHANGELOG.md) - [Latest Release]()
 
