@@ -433,7 +433,10 @@ func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddre
 					resultData[key].Target.ParentRelations = append(resultData[key].Target.ParentRelations, parents...)
 				}
 				if 0 < amount || !query.HasRequiredSubQueries() {
-					tmpRet = append(tmpRet, resultData[key])
+					// only add results if we actually are returning data
+					if returnDataFlag {
+						tmpRet = append(tmpRet, resultData[key])
+					}
 					i++
 				}
 			}

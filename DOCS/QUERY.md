@@ -1067,7 +1067,7 @@ This query will find all entities of type "Alpha" which match "Value" equals "ps
 
 ### 19. Adjusting the result order
 ```go
-qry := qa.New().Read("Alpha").Order("Properties.Psi", qa.ORDER_DIRECTION_ASC, qa.ODER_MODE_NUM)
+qry := qa.New().Read("Alpha").Order("Properties.Psi", query.ORDER_DIRECTION_ASC, query.ODER_MODE_NUM)
 result := qa.Execute(qry)
 ```
 This query will find all entities of type "Alpha". Before returning the data, it will resort the order of the root level results by the field "Properties.Psi" direction "ASC" (ascending) in mode "ORDER_MODE_NUMERIC". Order can only be applied on root level queries and will sort results only on root level results.
@@ -1143,19 +1143,236 @@ This query will find all entities of type "Alpha". Before returning the data, it
 
 ### 20. Complex read query example
 ```go
-qry := qa.New().Read("Entity").To(
-    qa.New().Reduce("EntityA").To(
-        qa.New().Reduce("EntityAA").Match("Properties.Example","==","this").OrMatch("Properties.Example","==","that")
-	),
+qry := qa.New().Read("Alpha").To(
+  qa.New().Reduce("Beta").To(
+    qa.New().Reduce("Gamma").Match("Properties.Example", "==", "this").OrMatch("Properties.Example", "==", "that"),
+  ),
 ).To(
-    qa.New().Read("EntityB").Match("Context","!=","beta").TraverseOut(3),
+    qa.New().Read("Epsilon").Match("Context", "!=", "beta").TraverseOut(3),
 ).CanFrom(
-    qa.New().Read("EntityZ").Match("Value","==","ipsum"),
+    qa.New().Read("Psi").Match("Value", "==", "ipsum"),
 )
 result := qa.Execute(qry)
 ```
 This is a rather complex query showcasing some of the capabilities combined. The following visualisation should showcase the queries final structure, while at the same time show the possible result structure. Results will always be starting at the root query. The dark green queries will deliver a guaranteed result. Light green queries are optional and therefor might or might not be existent in a result. The blue queries are just modifying the results and will not be included in the results.
 ![complex read query visualisation](./IMAGES/complex_read_query_gits_fixed.png)
+```json
+{
+  "Entities": [
+    {
+      "Type": "Alpha",
+      "ID": 1,
+      "Value": "could",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Epsilon",
+            "ID": 1,
+            "Value": "never",
+            "Context": "notbeta",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [
+              {
+                "Context": "",
+                "Properties": null,
+                "Target": {
+                  "Type": "Gamma",
+                  "ID": 7,
+                  "Value": "let you down",
+                  "Context": "",
+                  "Version": 1,
+                  "Properties": {
+                    "Example": "that"
+                  },
+                  "ChildRelations": null,
+                  "ParentRelations": null
+                },
+                "SourceType": "",
+                "SourceID": 0,
+                "TargetType": "",
+                "TargetID": 0,
+                "Version": 0
+              },
+              {
+                "Context": "",
+                "Properties": null,
+                "Target": {
+                  "Type": "Gamma",
+                  "ID": 2,
+                  "Value": "gonne",
+                  "Context": "",
+                  "Version": 1,
+                  "Properties": {
+                    "Example": "that"
+                  },
+                  "ChildRelations": [
+                    {
+                      "Context": "",
+                      "Properties": null,
+                      "Target": {
+                        "Type": "Gamma",
+                        "ID": 3,
+                        "Value": "give",
+                        "Context": "",
+                        "Version": 1,
+                        "Properties": {
+                          "Example": "that"
+                        },
+                        "ChildRelations": [
+                          {
+                            "Context": "",
+                            "Properties": null,
+                            "Target": {
+                              "Type": "Gamma",
+                              "ID": 4,
+                              "Value": "you",
+                              "Context": "",
+                              "Version": 1,
+                              "Properties": {
+                                "Example": "that"
+                              },
+                              "ChildRelations": null,
+                              "ParentRelations": null
+                            },
+                            "SourceType": "",
+                            "SourceID": 0,
+                            "TargetType": "",
+                            "TargetID": 0,
+                            "Version": 0
+                          },
+                          {
+                            "Context": "",
+                            "Properties": null,
+                            "Target": {
+                              "Type": "Gamma",
+                              "ID": 5,
+                              "Value": "up",
+                              "Context": "",
+                              "Version": 1,
+                              "Properties": {
+                                "Example": "that"
+                              },
+                              "ChildRelations": null,
+                              "ParentRelations": null
+                            },
+                            "SourceType": "",
+                            "SourceID": 0,
+                            "TargetType": "",
+                            "TargetID": 0,
+                            "Version": 0
+                          }
+                        ],
+                        "ParentRelations": null
+                      },
+                      "SourceType": "",
+                      "SourceID": 0,
+                      "TargetType": "",
+                      "TargetID": 0,
+                      "Version": 0
+                    }
+                  ],
+                  "ParentRelations": null
+                },
+                "SourceType": "",
+                "SourceID": 0,
+                "TargetType": "",
+                "TargetID": 0,
+                "Version": 0
+              },
+              {
+                "Context": "",
+                "Properties": null,
+                "Target": {
+                  "Type": "Gamma",
+                  "ID": 6,
+                  "Value": "never gonne",
+                  "Context": "",
+                  "Version": 1,
+                  "Properties": {
+                    "Example": "that"
+                  },
+                  "ChildRelations": null,
+                  "ParentRelations": null
+                },
+                "SourceType": "",
+                "SourceID": 0,
+                "TargetType": "",
+                "TargetID": 0,
+                "Version": 0
+              }
+            ],
+            "ParentRelations": []
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        }
+      ],
+      "ParentRelations": [
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Psi",
+            "ID": 1,
+            "Value": "ipsum",
+            "Context": "",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [],
+            "ParentRelations": []
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        }
+      ]
+    },
+    {
+      "Type": "Alpha",
+      "ID": 2,
+      "Value": "could",
+      "Context": "",
+      "Version": 1,
+      "Properties": {},
+      "ChildRelations": [
+        {
+          "Context": "",
+          "Properties": null,
+          "Target": {
+            "Type": "Epsilon",
+            "ID": 2,
+            "Value": "never",
+            "Context": "notbeta",
+            "Version": 1,
+            "Properties": {},
+            "ChildRelations": [],
+            "ParentRelations": []
+          },
+          "SourceType": "",
+          "SourceID": 0,
+          "TargetType": "",
+          "TargetID": 0,
+          "Version": 0
+        }
+      ],
+      "ParentRelations": []
+    }
+  ],
+  "Relations": null,
+  "Amount": 2
+}
+```
 
 [top](#query-builder)
 ## Definitions
