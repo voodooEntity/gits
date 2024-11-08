@@ -30,7 +30,7 @@ newId := alphaGits.MapData(datasetToStore)
 
 In our example, we create a new gits instance, defined a minimal dataset in form of a transport.TransportEntity and Mapped it using the MapData function provided by our alpha instance.
 
-As you might notice i passed the constant "storage.MAP_FORCE_CREATE" as value of the ID. This is because right now there are three supported modes in terms of defining the ID. In our case we wanted to have a new dataset created, therefor we use the MAP_FORCE_CREATE.
+As you might notice i passed the constant "storage.MAP_FORCE_CREATE" as value of the ID. This is because right now there are three supported modes in terms of defining the ID. In our case we wanted to have a new dataset created, therefor we use the MAP_FORCE_CREATE. 
 
 It is also important to notice that we received newId (int) as return from MapData. This is the ID of the newly created dataset. Since in GITS (for details [check the Storage Architecture](STORAGE_ARCHITECTURE.md)) the unique identifier for a dataset is the combination of Type and ID, we can now directly access this dataset using the given information.
 
@@ -151,6 +151,10 @@ transport.TransportEntity{
 
 This enables the developer to vary the level of data abstraction based on actual practical needs. Either using different entities for your properties, or enhance the entities directly. It's up to you.
 
+### Final notes
+The MapData function should provide an easy way to map structures combining existing datasets and new datasets. 
+
+If you dont specify an ID in your transport.TransportEntity, the default will be MAP_IF_NOT_EXISTS.
 
 ## FAQ
 
