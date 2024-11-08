@@ -192,7 +192,7 @@ The following list contains topics that will be the focus of future major update
   * Adjusting Match() and OrMatch() when used with "Properties." to require the results to have the searched Property name.
   * Bugfix addresslist memory exception 
 
-[Full Changelog](CHANGELOG.md) - [Latest Release](https://github.com/voodooEntity/gits/releases/tag/0.0.9)
+[Full Changelog](CHANGELOG.md) - [Latest Release](https://github.com/voodooEntity/gits/releases/tag/0.9.1)
 
 ## License
 [Apache License Version 2.0](./LICENSE)
