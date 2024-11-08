@@ -2,74 +2,72 @@ package query
 
 import (
 	"encoding/json"
-	"github.com/voodooEntity/archivist"
-	"github.com/voodooEntity/gits"
+	"fmt"
+	"github.com/voodooEntity/gits/src/storage"
 	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
 	"strconv"
 	"testing"
 )
 
-func initStorage() {
-	archivist.Init("info", "stdout", "blafu")
+var testStorage *storage.Storage
 
-	// init the gits
-	gits.Init(types.PersistenceConfig{
-		RotationEntriesMax:           1000000,
-		Active:                       false,
-		PersistenceChannelBufferSize: 10000000,
-	})
+func initStorage() {
+	// archivist.Init("info", "stdout", "blafu")
+
+	newStorage := storage.NewStorage()
+	testStorage = newStorage
 }
 
 func createTestDataLinked() {
 
 	// create test data to query
-	typeIDalpha, _ := gits.CreateEntityType("Alpha")
-	typeIDbeta, _ := gits.CreateEntityType("Beta")
-	typeIDdelta, _ := gits.CreateEntityType("Delta")
-	typeIDgamma, _ := gits.CreateEntityType("Gamma")
+	typeIDalpha, _ := testStorage.CreateEntityType("Alpha")
+	typeIDbeta, _ := testStorage.CreateEntityType("Beta")
+	typeIDdelta, _ := testStorage.CreateEntityType("Delta")
+	typeIDgamma, _ := testStorage.CreateEntityType("Gamma")
 
-	entityAlphaID, _ := gits.CreateEntity(types.StorageEntity{
+	entityAlphaID, _ := testStorage.CreateEntity(types.StorageEntity{
 		Type:    typeIDalpha,
 		Value:   "alpha",
 		Context: "uno",
 	})
 
-	entityBetaID, _ := gits.CreateEntity(types.StorageEntity{
+	entityBetaID, _ := testStorage.CreateEntity(types.StorageEntity{
 		Type:    typeIDbeta,
 		Value:   "beta",
 		Context: "duo",
 	})
 
-	entityDeltaID, _ := gits.CreateEntity(types.StorageEntity{
+	entityDeltaID, _ := testStorage.CreateEntity(types.StorageEntity{
 		Type:    typeIDdelta,
 		Value:   "delta",
 		Context: "tres",
 	})
 
-	entityGammaID, _ := gits.CreateEntity(types.StorageEntity{
+	entityGammaID, _ := testStorage.CreateEntity(types.StorageEntity{
 		Type:    typeIDgamma,
 		Value:   "gamma",
 		Context: "quattro",
 	})
 
-	//printData(gits.EntityStorage)
+	//printData(gits.GetDefault().EntityStorage)
 
-	gits.CreateRelation(typeIDalpha, entityAlphaID, typeIDbeta, entityBetaID, types.StorageRelation{
+	testStorage.CreateRelation(typeIDalpha, entityAlphaID, typeIDbeta, entityBetaID, types.StorageRelation{
 		SourceType: typeIDalpha,
 		SourceID:   entityAlphaID,
 		TargetType: typeIDbeta,
 		TargetID:   entityBetaID,
 	})
 
-	gits.CreateRelation(typeIDbeta, entityBetaID, typeIDdelta, entityDeltaID, types.StorageRelation{
+	testStorage.CreateRelation(typeIDbeta, entityBetaID, typeIDdelta, entityDeltaID, types.StorageRelation{
 		SourceType: typeIDbeta,
 		SourceID:   entityBetaID,
 		TargetType: typeIDdelta,
 		TargetID:   entityDeltaID,
 	})
 
-	gits.CreateRelation(typeIDalpha, entityAlphaID, typeIDgamma, entityGammaID, types.StorageRelation{
+	testStorage.CreateRelation(typeIDalpha, entityAlphaID, typeIDgamma, entityGammaID, types.StorageRelation{
 		SourceType: typeIDalpha,
 		SourceID:   entityAlphaID,
 		TargetType: typeIDgamma,
@@ -81,7 +79,7 @@ func TestFilterValueByExcactMatch(t *testing.T) {
 	initStorage()
 	createTestDataLinearTypeNumericValue()
 	qry := New().Read("Alpha").Match("Value", "==", "42")
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) {
 		t.Error(result)
 	}
@@ -94,7 +92,7 @@ func TestFilterValueBySmallerThanMatch(t *testing.T) {
 	initStorage()
 	createTestDataLinearTypeNumericValue()
 	qry := New().Read("Alpha").Match("Value", "<", "3")
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 2 != len(result.Entities) {
 		t.Error(result)
 	}
@@ -107,7 +105,7 @@ func TestFilterValueByGreaterThanMatch(t *testing.T) {
 	initStorage()
 	createTestDataLinearTypeNumericValue()
 	qry := New().Read("Alpha").Match("Value", ">", "97")
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 3 != len(result.Entities) {
 		t.Error(result)
 	}
@@ -120,7 +118,7 @@ func TestFilterPropertyByExcactMatch(t *testing.T) {
 	initStorage()
 	createTestDataLinearTypeNumericPropertyTestValue()
 	qry := New().Read("Alpha").Match("Properties.Test", "==", "42")
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) {
 		t.Error(result)
 	}
@@ -130,9 +128,9 @@ func TestFilterPropertyByExcactMatch(t *testing.T) {
 }
 
 func createTestDataLinearTypeNumericValue() {
-	typeIDalpha, _ := gits.CreateEntityType("Alpha")
+	typeIDalpha, _ := testStorage.CreateEntityType("Alpha")
 	for i := 1; i <= 100; i++ {
-		gits.CreateEntity(types.StorageEntity{
+		testStorage.CreateEntity(types.StorageEntity{
 			Type:    typeIDalpha,
 			Value:   strconv.Itoa(i),
 			Context: "uno",
@@ -141,11 +139,11 @@ func createTestDataLinearTypeNumericValue() {
 }
 
 func createTestDataLinearTypeNumericPropertyTestValue() {
-	typeIDalpha, _ := gits.CreateEntityType("Alpha")
+	typeIDalpha, _ := testStorage.CreateEntityType("Alpha")
 	for i := 1; i <= 100; i++ {
 		props := make(map[string]string)
 		props["Test"] = strconv.Itoa(i)
-		gits.CreateEntity(types.StorageEntity{
+		testStorage.CreateEntity(types.StorageEntity{
 			Type:       typeIDalpha,
 			Value:      "alpha",
 			Context:    "uno",
@@ -162,7 +160,7 @@ func TestBidirectionalJoin(t *testing.T) {
 	).From(
 		New().Read("Alpha"),
 	)
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) || 1 != len(result.Entities[0].ChildRelations) || 1 != len(result.Entities[0].ParentRelations) {
 		t.Error(result)
 	}
@@ -181,7 +179,7 @@ func TestBidrectionalJoinAndTurn(t *testing.T) {
 			New().Read("Gamma").Read(),
 		),
 	)
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) || 1 != len(result.Entities[0].ChildRelations) || 1 != len(result.Entities[0].ParentRelations[0].Target.ChildRelations) || 1 != len(result.Entities[0].ParentRelations) {
 		t.Error(result)
 	}
@@ -194,7 +192,7 @@ func TestSimpleReadMultiPool(t *testing.T) {
 	initStorage()
 	createTestDataLinked()
 	qry := New().Read("Alpha", "Beta")
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 2 != len(result.Entities) {
 		t.Error(result)
 	}
@@ -207,7 +205,7 @@ func TestSimpleReadMultiPoolWithOrMatch(t *testing.T) {
 	initStorage()
 	createTestDataLinked()
 	qry := New().Read("Alpha", "Beta").Match("Value", "==", "alpha").OrMatch("Value", "==", "beta")
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 2 != len(result.Entities) {
 		t.Error(result)
 	}
@@ -224,7 +222,7 @@ func TestBidirectionalJoinWithCondition(t *testing.T) {
 	).From(
 		New().Read("Alpha").Match("Context", "==", "uno").Match("Value", "==", "alpha"),
 	)
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) || 1 != len(result.Entities[0].ChildRelations) || 1 != len(result.Entities[0].ParentRelations) {
 		t.Error(result)
 	}
@@ -239,7 +237,7 @@ func TestSingleJoinChild(t *testing.T) {
 	qry := New().Read("Alpha").To(
 		New().Read("Beta"),
 	)
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) || 1 != len(result.Entities[0].ChildRelations) {
 		t.Error(result)
 	}
@@ -256,7 +254,7 @@ func TestDoubleDepthJoinChild(t *testing.T) {
 			New().Read("Delta"),
 		),
 	)
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) || 1 != len(result.Entities[0].ChildRelations) || 1 != len(result.Entities[0].ChildRelations[0].Target.ChildRelations) {
 		t.Error(result)
 	}
@@ -271,7 +269,7 @@ func TestSimpleReadWithReduce(t *testing.T) {
 	qry := New().Read("Alpha").To(
 		New().Reduce("Beta"),
 	)
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) && 0 == len(result.Entities[0].ChildRelations) {
 		t.Error(result)
 	}
@@ -284,7 +282,7 @@ func TestSimpleRead(t *testing.T) {
 	initStorage()
 	createTestDataLinked()
 	qry := New().Read("Alpha")
-	result := Execute(qry)
+	result := Execute(testStorage, qry)
 	if 1 != len(result.Entities) {
 		t.Error(result)
 	}
@@ -295,22 +293,22 @@ func TestSimpleRead(t *testing.T) {
 
 func TestUpdateEntityValue(t *testing.T) {
 	initStorage()
-	gits.CreateEntityType("Test")
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.CreateEntityType("Test")
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      -1,
 		Type:    "Test",
 		Value:   "TestABC",
 		Context: "TestABC",
 	})
 	qry := New().Read("Test")
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
 	qry = New().Update("Test").Match("Value", "==", "TestABC").Set("Value", "TestDEF").Set("Context", "asdasdasd")
-	Execute(qry)
+	Execute(testStorage, qry)
 	qry = New().Read("Test")
-	ret = Execute(qry)
+	ret = Execute(testStorage, qry)
 	if 1 != len(ret.Entities) && "TestDEF" == ret.Entities[0].Value && "asdasdasd" == ret.Entities[0].Context {
 		t.Error(ret)
 	}
@@ -320,7 +318,7 @@ func TestUpdateEntityValue(t *testing.T) {
 }
 
 func TestReadJoinMatchWithMultipleRequiredMatch(t *testing.T) {
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      0,
 		Type:    "Parent",
 		Value:   "dad",
@@ -334,7 +332,7 @@ func TestReadJoinMatchWithMultipleRequiredMatch(t *testing.T) {
 			}},
 		},
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      0,
 		Type:    "Parent",
 		Value:   "dad",
@@ -348,7 +346,7 @@ func TestReadJoinMatchWithMultipleRequiredMatch(t *testing.T) {
 			}},
 		},
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      0,
 		Type:    "Parent",
 		Value:   "dad",
@@ -365,8 +363,8 @@ func TestReadJoinMatchWithMultipleRequiredMatch(t *testing.T) {
 	qry := New().Read("Parent").To(
 		New().Read("Test").Match("Value", "==", "TestABC").Match("Context", "==", "TestABC"),
 	)
-	ret := Execute(qry)
-	archivist.Info("data return", ret)
+	ret := Execute(testStorage, qry)
+	fmt.Println("data return", ret)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
@@ -376,7 +374,7 @@ func TestReadJoinMatchWithMultipleRequiredMatch(t *testing.T) {
 }
 
 func TestFindValidTokenRequest(t *testing.T) {
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:    0,
 		Type:  "User",
 		Value: "testuser",
@@ -390,7 +388,7 @@ func TestFindValidTokenRequest(t *testing.T) {
 			}},
 		},
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      0,
 		Type:    "Parent",
 		Value:   "dad",
@@ -405,7 +403,7 @@ func TestFindValidTokenRequest(t *testing.T) {
 			}},
 		},
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      0,
 		Type:    "Parent",
 		Value:   "dad",
@@ -421,10 +419,10 @@ func TestFindValidTokenRequest(t *testing.T) {
 		},
 	})
 	qry := New().Read("User").Match("Value", "==", "testuser").To(
-		New().Read("Token").Match("Value", "==", "findme").Match("Properties.Context", "==", "TestABC"),
+		New().Read("Token").Match("Value", "==", "findme").Match("Context", "==", "TestABC"),
 	)
-	ret := Execute(qry)
-	archivist.Info("data return", ret)
+	ret := Execute(testStorage, qry)
+	fmt.Println("data return", ret)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
@@ -434,26 +432,26 @@ func TestFindValidTokenRequest(t *testing.T) {
 }
 
 func TestReadMatchWithMultipleRequiredMatch(t *testing.T) {
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      -1,
 		Type:    "Test",
 		Value:   "TestABC",
 		Context: "TestABC",
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      -1,
 		Type:    "Test",
 		Value:   "TestDEF",
 		Context: "TestABC",
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:      -1,
 		Type:    "Test",
 		Value:   "TestABC",
 		Context: "TestDEF",
 	})
 	qry := New().Read("Test").Match("Value", "==", "TestABC").Match("Context", "==", "TestABC")
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
@@ -464,22 +462,22 @@ func TestReadMatchWithMultipleRequiredMatch(t *testing.T) {
 
 func TestDeleteEntityByTypeAndID(t *testing.T) {
 	initStorage()
-	gits.CreateEntityType("Test")
-	entity := gits.MapTransportData(transport.TransportEntity{
+	testStorage.CreateEntityType("Test")
+	entity := testStorage.MapTransportData(transport.TransportEntity{
 		ID:      -1,
 		Type:    "Test",
 		Value:   "TestABC",
 		Context: "TestABC",
 	})
 	qry := New().Read("Test").Match("ID", "==", strconv.Itoa(entity.ID))
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
 	qry = New().Delete("Test").Match("ID", "==", strconv.Itoa(entity.ID))
-	Execute(qry)
+	Execute(testStorage, qry)
 	qry = New().Read("Test").Match("ID", "==", strconv.Itoa(entity.ID))
-	ret = Execute(qry)
+	ret = Execute(testStorage, qry)
 	if 0 != len(ret.Entities) {
 		t.Error(ret)
 	}
@@ -491,13 +489,13 @@ func TestDeleteEntityByTypeAndID(t *testing.T) {
 func TestQueryLinkTo(t *testing.T) {
 	initStorage()
 	// create testdata
-	gits.CreateEntityType("Test")
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.CreateEntityType("Test")
+	testStorage.MapTransportData(transport.TransportEntity{
 		Type:  "Test",
 		ID:    -1,
 		Value: "TestABC",
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		Type:  "Test",
 		ID:    -1,
 		Value: "TestDEF",
@@ -505,7 +503,7 @@ func TestQueryLinkTo(t *testing.T) {
 
 	// print the testdata before linking
 	qry := New().Read("Test")
-	tmp := Execute(qry)
+	tmp := Execute(testStorage, qry)
 
 	if 2 != len(tmp.Entities) || 0 != len(tmp.Entities[0].ChildRelations) || 0 != len(tmp.Entities[1].ChildRelations) {
 		t.Error(tmp)
@@ -514,13 +512,13 @@ func TestQueryLinkTo(t *testing.T) {
 	qry = New().Link("Test").Match("Value", "==", "TestABC").To(
 		New().Find("Test").Match("Value", "==", "TestDEF"),
 	)
-	Execute(qry)
+	Execute(testStorage, qry)
 
 	// now read out to approve we gotr the linked data
 	qry = New().Read("Test").Match("Value", "==", "TestABC").To(
 		New().Read("Test"),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 1 != len(ret.Entities) || 1 != len(ret.Entities[0].ChildRelations) {
 		t.Error("missing results", ret)
 	}
@@ -535,13 +533,13 @@ func TestQueryLinkTo(t *testing.T) {
 func TestQueryLinkFrom(t *testing.T) {
 	initStorage()
 	// create testdata
-	gits.CreateEntityType("Test")
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.CreateEntityType("Test")
+	testStorage.MapTransportData(transport.TransportEntity{
 		Type:  "Test",
 		ID:    -1,
 		Value: "TestABC",
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		Type:  "Test",
 		ID:    -1,
 		Value: "TestDEF",
@@ -549,7 +547,7 @@ func TestQueryLinkFrom(t *testing.T) {
 
 	// print the testdata before linking
 	qry := New().Read("Test")
-	tmp := Execute(qry)
+	tmp := Execute(testStorage, qry)
 	if 2 != len(tmp.Entities) {
 		t.Error("missing results", tmp)
 	}
@@ -558,13 +556,13 @@ func TestQueryLinkFrom(t *testing.T) {
 	qry = New().Link("Test").Match("Value", "==", "TestABC").From(
 		New().Find("Test").Match("Value", "==", "TestDEF"),
 	)
-	Execute(qry)
+	Execute(testStorage, qry)
 
 	// now read out to approve we gotr the linked data
 	qry = New().Read("Test").Match("Value", "==", "TestABC").From(
 		New().Read("Test"),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 1 != len(ret.Entities) || 1 != len(ret.Entities[0].ParentRelations) {
 		t.Error("missing results", ret)
 	}
@@ -578,8 +576,8 @@ func TestQueryLinkFrom(t *testing.T) {
 
 func TestQueryUnlink(t *testing.T) {
 	initStorage()
-	gits.CreateEntityType("TestA")
-	gits.CreateEntityType("TestB")
+	testStorage.CreateEntityType("TestA")
+	testStorage.CreateEntityType("TestB")
 	testdata := transport.TransportEntity{
 		ID:    -1,
 		Type:  "TestA",
@@ -595,13 +593,13 @@ func TestQueryUnlink(t *testing.T) {
 			},
 		},
 	}
-	gits.MapTransportData(testdata)
+	testStorage.MapTransportData(testdata)
 
 	// read linked inserted data
 	qry := New().Read("TestA").Match("Value", "==", "Something").To(
 		New().Read("TestB").Match("Value", "==", "Else"),
 	)
-	tmp := Execute(qry)
+	tmp := Execute(testStorage, qry)
 	if 1 != len(tmp.Entities) || 1 != len(tmp.Entities[0].ChildRelations) {
 		t.Error("missing results", tmp)
 	}
@@ -613,20 +611,20 @@ func TestQueryUnlink(t *testing.T) {
 	qry = New().Unlink("TestA").Match("Value", "==", "Something").To(
 		New().Find("TestB").Match("Value", "==", "Else"),
 	)
-	Execute(qry)
+	Execute(testStorage, qry)
 
 	// read linked inserted data
 	qry = New().Read("TestA").Match("Value", "==", "Something").To(
 		New().Read("TestB").Match("Value", "==", "Else"),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 0 != len(ret.Entities) {
 		t.Error("there should be no result", tmp)
 	}
 
 	// make sure the entries have no links on either side
 	qry = New().Read("TestA", "TestB")
-	ret = Execute(qry)
+	ret = Execute(testStorage, qry)
 	if 2 != len(ret.Entities) {
 		t.Error("there should be 2 results", tmp)
 	}
@@ -640,8 +638,8 @@ func TestQueryUnlink(t *testing.T) {
 
 func TestQueryUnlinkReverse(t *testing.T) {
 	initStorage()
-	gits.CreateEntityType("TestA")
-	gits.CreateEntityType("TestB")
+	testStorage.CreateEntityType("TestA")
+	testStorage.CreateEntityType("TestB")
 	testdata := transport.TransportEntity{
 		ID:    -1,
 		Type:  "TestB",
@@ -657,13 +655,13 @@ func TestQueryUnlinkReverse(t *testing.T) {
 			},
 		},
 	}
-	gits.MapTransportData(testdata)
+	testStorage.MapTransportData(testdata)
 
 	// read linked inserted data
 	qry := New().Read("TestA").Match("Value", "==", "Something").From(
 		New().Read("TestB").Match("Value", "==", "Else"),
 	)
-	tmp := Execute(qry)
+	tmp := Execute(testStorage, qry)
 	if 1 != len(tmp.Entities) || 1 != len(tmp.Entities[0].ParentRelations) {
 		t.Error("testdata not existent further processing makes no sense", tmp)
 	}
@@ -672,18 +670,18 @@ func TestQueryUnlinkReverse(t *testing.T) {
 	qry = New().Unlink("TestA").Match("Value", "==", "Something").From(
 		New().Find("TestB").Match("Value", "==", "Else"),
 	)
-	Execute(qry)
+	Execute(testStorage, qry)
 
 	// read linked inserted data
 	qry = New().Read("TestA").Match("Value", "==", "Something").From(
 		New().Read("TestB").Match("Value", "==", "Else"),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 0 != len(ret.Entities) {
 		t.Error("there should not be any result", ret)
 	}
 	qry = New().Read("TestA", "TestB")
-	ret = Execute(qry)
+	ret = Execute(testStorage, qry)
 	if 2 != len(ret.Entities) {
 		t.Error("there should be 2 entries", ret)
 	}
@@ -733,7 +731,7 @@ func review_TestbuildTestQueryJson3(t *testing.T) {
 func review_TestbuildTestQueryJsonGetQbQueries(t *testing.T) {
 	initStorage()
 	//
-	archivist.Info("Get all marketplaces implemented by Max Mustermann from person")
+	fmt.Println("Get all marketplaces implemented by Max Mustermann from person")
 	qry := New().Read("Person").Match("Value", "==", "Max Mustermann").To(
 		New().Read("Marketplace").Match("Properties.IsAbstract", "==", "false"),
 	).To(
@@ -744,14 +742,14 @@ func review_TestbuildTestQueryJsonGetQbQueries(t *testing.T) {
 	//printData(qry)
 
 	//
-	archivist.Info("Get all marketplaces shipping to germany")
+	fmt.Println("Get all marketplaces shipping to germany")
 	qry = New().Read("Marketplace").To(
 		New().Reduce("Country").Match("Value", "==", "Germany"),
 	)
 	//printData(qry)
 
 	//
-	archivist.Info("Get all marketplaces ")
+	fmt.Println("Get all marketplaces ")
 	qry = New().Read("Person").Match("Value", "==", "Max Mustermann").To(
 		New().Read("Marketplace"),
 	).To(
@@ -761,7 +759,7 @@ func review_TestbuildTestQueryJsonGetQbQueries(t *testing.T) {
 	)
 	printData(qry)
 
-	archivist.Info("Get Person that implemented marketplace")
+	fmt.Println("Get Person that implemented marketplace")
 	qry = New().Read("Marketplace").From(
 		New().Read("Person"),
 	)
@@ -772,7 +770,7 @@ func TestRequiredAndOptionalMixedAlpha(t *testing.T) {
 	initStorage()
 	// create the testdata
 	testdata := mapQbStructureMap()
-	gits.MapTransportData(testdata)
+	testStorage.MapTransportData(testdata)
 
 	//  Test forced 2 depth marketplace
 	qry := New().Read("Person").To(
@@ -783,7 +781,7 @@ func TestRequiredAndOptionalMixedAlpha(t *testing.T) {
 		),
 	)
 
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 1 != len(ret.Entities) || 1 != len(ret.Entities[0].ChildRelations) ||
 		4 != len(ret.Entities[0].ChildRelations[0].Target.ChildRelations) {
 		t.Error("missing results", ret)
@@ -798,14 +796,14 @@ func TestRequiredAndOptionalMixedBeta(t *testing.T) {
 	initStorage()
 	// create the testdata
 	testdata := mapQbStructureMap()
-	gits.MapTransportData(testdata)
+	testStorage.MapTransportData(testdata)
 
 	qry := New().Read("Person").To(
 		New().Read("Marketplace").CanTo(
 			New().Read("Marketplace"),
 		),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 1 != len(ret.Entities) || 2 != len(ret.Entities[0].ChildRelations) {
 		t.Error("missing results", ret)
 	}
@@ -828,11 +826,11 @@ func TestRequiredAndOptionalMixedBeta(t *testing.T) {
 func TestOptionalQueryJoinFirstLevel(t *testing.T) {
 	initStorage()
 	testdata := mapQbStructureMap()
-	gits.MapTransportData(testdata)
+	testStorage.MapTransportData(testdata)
 	qry := New().Read("Person").CanTo(
 		New().Read("Shipping"),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 	if 1 != len(ret.Entities) || 0 < len(ret.Entities[0].ChildRelations) {
 		t.Error("wrong result format", ret)
 	}
@@ -844,11 +842,11 @@ func TestOptionalQueryJoinFirstLevel(t *testing.T) {
 func TestRequiredQueryJoinFirstLevelSuccess(t *testing.T) {
 	initStorage()
 	testdata := mapQbStructureMap()
-	gits.MapTransportData(testdata)
+	testStorage.MapTransportData(testdata)
 	qry := New().Read("Person").To(
 		New().Read("Marketplace"),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 
 	if 1 != len(ret.Entities) || 2 != len(ret.Entities[0].ChildRelations) {
 		t.Error("wrong result format", ret)
@@ -861,11 +859,11 @@ func TestRequiredQueryJoinFirstLevelSuccess(t *testing.T) {
 func TestRequiredQueryJoinFirstLevelFail(t *testing.T) {
 	initStorage()
 	testdata := mapQbStructureMap()
-	gits.MapTransportData(testdata)
+	testStorage.MapTransportData(testdata)
 	qry := New().Read("Person").To(
 		New().Read("Shipping"),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 
 	if 0 != len(ret.Entities) {
 		t.Error("wrong result format", ret)
@@ -878,14 +876,14 @@ func TestRequiredQueryJoinFirstLevelFail(t *testing.T) {
 func TestRequiredQueryJoinInDepthFail(t *testing.T) {
 	initStorage()
 	testdata := mapQbStructureMap()
-	gits.MapTransportData(testdata)
-	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	testStorage.MapTransportData(testdata)
+	fmt.Println(" - - - - - - - - - Test required first level join  - - - - - - - - -")
 	qry := New().Read("Person").To(
 		New().Read("Marketplace").To(
 			New().Read("Person"),
 		),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 
 	if 0 != len(ret.Entities) {
 		t.Error("wrong result format", ret)
@@ -897,14 +895,14 @@ func TestRequiredQueryJoinInDepthFail(t *testing.T) {
 
 func TestRequiredQueryJoinInDepthSuccess(t *testing.T) {
 	testdata := mapQbStructureMap()
-	gits.MapTransportData(testdata)
-	archivist.Info(" - - - - - - - - - Test required first level join  - - - - - - - - -")
+	testStorage.MapTransportData(testdata)
+	fmt.Println(" - - - - - - - - - Test required first level join  - - - - - - - - -")
 	qry := New().Read("Person").To(
 		New().Read("Marketplace").To(
 			New().Read("Country"),
 		),
 	)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 
 	if 1 != len(ret.Entities) || 1 != len(ret.Entities[0].ChildRelations) || 2 != len(ret.Entities[0].ChildRelations[0].Target.ChildRelations) {
 		t.Error("wrong result format", ret)
@@ -916,7 +914,7 @@ func TestRequiredQueryJoinInDepthSuccess(t *testing.T) {
 
 func printData(data any) {
 	t, _ := json.MarshalIndent(data, "", "\t")
-	archivist.Info("Query Data Struct", string(t))
+	fmt.Println("Query Data Struct", string(t))
 }
 
 func mapQbStructureMap() transport.TransportEntity {
@@ -1019,17 +1017,17 @@ func mapQbStructureMap() transport.TransportEntity {
 }
 
 func createTestDataForOrderByValueNumeric() {
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:    -1,
 		Type:  "Something",
 		Value: "2",
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:    -1,
 		Type:  "Something",
 		Value: "333",
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:    -1,
 		Type:  "Something",
 		Value: "1",
@@ -1037,17 +1035,17 @@ func createTestDataForOrderByValueNumeric() {
 }
 
 func createTestDataOrderAlphabetical() {
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:    -1,
 		Type:  "Something",
 		Value: "Das",
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:    -1,
 		Type:  "Something",
 		Value: "Zebra",
 	})
-	gits.MapTransportData(transport.TransportEntity{
+	testStorage.MapTransportData(transport.TransportEntity{
 		ID:    -1,
 		Type:  "Something",
 		Value: "auch",
@@ -1058,7 +1056,7 @@ func TestOrderByNumericValueAsc(t *testing.T) {
 	initStorage()
 	createTestDataForOrderByValueNumeric()
 	qry := New().Read("Something").Order("Value", ORDER_DIRECTION_ASC, ORDER_MODE_NUM)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 
 	if 3 != len(ret.Entities) || "1" != ret.Entities[0].Value || "2" != ret.Entities[1].Value || "333" != ret.Entities[2].Value {
 		t.Error("wrong result format", ret)
@@ -1072,7 +1070,7 @@ func TestOrderByNumericValueDesc(t *testing.T) {
 	initStorage()
 	createTestDataForOrderByValueNumeric()
 	qry := New().Read("Something").Order("Value", ORDER_DIRECTION_DESC, ORDER_MODE_NUM)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 
 	if 3 != len(ret.Entities) || "333" != ret.Entities[0].Value || "2" != ret.Entities[1].Value || "1" != ret.Entities[2].Value {
 		t.Error("wrong result format", ret)
@@ -1086,7 +1084,7 @@ func TestOrderByAlphabeticalValueAsc(t *testing.T) {
 	initStorage()
 	createTestDataOrderAlphabetical()
 	qry := New().Read("Something").Order("Value", ORDER_DIRECTION_ASC, ORDER_MODE_ALPHA)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 
 	if 3 != len(ret.Entities) || "auch" != ret.Entities[0].Value || "Das" != ret.Entities[1].Value || "Zebra" != ret.Entities[2].Value {
 		t.Error("wrong result format", ret)
@@ -1100,7 +1098,7 @@ func TestOrderByAlphabeticalValueDesc(t *testing.T) {
 	initStorage()
 	createTestDataOrderAlphabetical()
 	qry := New().Read("Something").Order("Value", ORDER_DIRECTION_DESC, ORDER_MODE_ALPHA)
-	ret := Execute(qry)
+	ret := Execute(testStorage, qry)
 
 	if 3 != len(ret.Entities) || "Zebra" != ret.Entities[0].Value || "Das" != ret.Entities[1].Value || "auch" != ret.Entities[2].Value {
 		t.Error("wrong result format", ret)
@@ -1111,11 +1109,11 @@ func TestOrderByAlphabeticalValueDesc(t *testing.T) {
 }
 
 func Cleanup() {
-	gits.EntityStorage = make(map[int]map[int]types.StorageEntity)
-	gits.EntityIDMax = make(map[int]int)
-	gits.EntityTypes = make(map[int]string)
-	gits.EntityRTypes = make(map[string]int)
-	gits.EntityTypeIDMax = 0
-	gits.RelationStorage = make(map[int]map[int]map[int]map[int]types.StorageRelation)
-	gits.RelationRStorage = make(map[int]map[int]map[int]map[int]bool)
+	testStorage.EntityStorage = make(map[int]map[int]types.StorageEntity)
+	testStorage.EntityIDMax = make(map[int]int)
+	testStorage.EntityTypes = make(map[int]string)
+	testStorage.EntityRTypes = make(map[string]int)
+	testStorage.EntityTypeIDMax = 0
+	testStorage.RelationStorage = make(map[int]map[int]map[int]map[int]types.StorageRelation)
+	testStorage.RelationRStorage = make(map[int]map[int]map[int]map[int]bool)
 }

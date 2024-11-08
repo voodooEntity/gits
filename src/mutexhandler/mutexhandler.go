@@ -1,8 +1,7 @@
 package mutexhandler
 
 import (
-	"github.com/voodooEntity/archivist"
-	"github.com/voodooEntity/gits"
+	"github.com/voodooEntity/gits/src/storage"
 )
 
 const (
@@ -15,11 +14,14 @@ const (
 )
 
 type MutexHandler struct {
+	Storage *storage.Storage
 	Applied []int
 }
 
-func New() *MutexHandler {
-	tmp := MutexHandler{}
+func New(store *storage.Storage) *MutexHandler {
+	tmp := MutexHandler{
+		Storage: store,
+	}
 	return &tmp
 }
 
@@ -28,7 +30,7 @@ func (self *MutexHandler) Apply(muident int) *MutexHandler {
 	if 0 < len(self.Applied) {
 		for _, val := range self.Applied {
 			if val == muident {
-				archivist.Debug("Trying to multi-apply same lock in MutexHandler")
+				// archivist.Debug("Trying to multi-apply same lock in MutexHandler")
 				return self
 			}
 		}
@@ -39,22 +41,22 @@ func (self *MutexHandler) Apply(muident int) *MutexHandler {
 	// apply mmutex
 	switch muident {
 	case EntityTypeLock:
-		gits.EntityTypeMutex.Lock()
+		self.Storage.EntityTypeMutex.Lock()
 		applied = true
 	case EntityTypeRLock:
-		gits.EntityTypeMutex.RLock()
+		self.Storage.EntityTypeMutex.RLock()
 		applied = true
 	case EntityStorageLock:
-		gits.EntityStorageMutex.Lock()
+		self.Storage.EntityStorageMutex.Lock()
 		applied = true
 	case EntityStorageRLock:
-		gits.EntityStorageMutex.RLock()
+		self.Storage.EntityStorageMutex.RLock()
 		applied = true
 	case RelationStorageLock:
-		gits.RelationStorageMutex.Lock()
+		self.Storage.RelationStorageMutex.Lock()
 		applied = true
 	case RelationStorageRLock:
-		gits.RelationStorageMutex.RLock()
+		self.Storage.RelationStorageMutex.RLock()
 		applied = true
 	}
 	// if a Mutex was applied, add the muname to our Applied list
@@ -69,17 +71,17 @@ func (self *MutexHandler) Release() {
 		// apply mmutex
 		switch muident {
 		case EntityTypeLock:
-			gits.EntityTypeMutex.Unlock()
+			self.Storage.EntityTypeMutex.Unlock()
 		case EntityTypeRLock:
-			gits.EntityTypeMutex.RUnlock()
+			self.Storage.EntityTypeMutex.RUnlock()
 		case EntityStorageLock:
-			gits.EntityStorageMutex.Unlock()
+			self.Storage.EntityStorageMutex.Unlock()
 		case EntityStorageRLock:
-			gits.EntityStorageMutex.RUnlock()
+			self.Storage.EntityStorageMutex.RUnlock()
 		case RelationStorageLock:
-			gits.RelationStorageMutex.Unlock()
+			self.Storage.RelationStorageMutex.Unlock()
 		case RelationStorageRLock:
-			gits.RelationStorageMutex.RUnlock()
+			self.Storage.RelationStorageMutex.RUnlock()
 		}
 	}
 }
