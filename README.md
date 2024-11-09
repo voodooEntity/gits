@@ -62,7 +62,7 @@ go get github.com/voodooEntity/gits@0.9.1
 ### Usage
 The following examples provide a sneak peak into the usage of GITS. For a more detailed overview please [visit the documentation](DOCS/README.md).
 
-#### Create an instance
+#### Creating an instance
 To use GITS first we need to create a new instance
 ```go
 myGitsInstance := gits.NewInstance("main")
@@ -107,7 +107,7 @@ type TransportRelation struct {
 }
 ```
 
-#### Create new data
+#### Creating new data
 To make creating new data as easy as possible, GITS provides the "MapData" method which only needs to be provided with an instance of transport.TransportEntity and will take care of the rest. 
 ```go
 rootIntID := myGitsInstance.MapData(transport.TransportEntity{
@@ -131,7 +131,7 @@ As you can see in the example, we are passing a nested structure to the MapTrans
 
 For more detailed information on the capabilities of MapTransport please check "MapTransport Examples & Details" addlink
 
-#### Use the Query language
+#### Using the Query Builder
 The most simple way to access data in a GITS storage is to use the inbuilt query language builder. While the GITS custom query builder options may be limited, they include the most important options to cover a wide range of use cases. 
 
 An example of how to use it to read the previously mapped data
