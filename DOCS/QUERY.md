@@ -1,5 +1,5 @@
 # Query Builder
-[back](README)
+[back](README.md)
 
 ## Index
 * [Overview](#overview)
@@ -83,6 +83,8 @@ qry := qa.New() //.Read(..).Match(..)...
 // The final query created with the builder can than be executed using
 result := qa.Execute(qry)
 ```
+
+***Note: All query examples can also be found in [examples.go](../cmd/examples/examples.go) .***
 
 [top](#query-builder)
 ### 1. Simple Read Query
@@ -1405,4 +1407,4 @@ The following operators are supported in terms of matching actions.
 | in       | if any alpha is equal to beta    | alpha is split by "," delimiter |           |
 
 [top](#query-builder) - 
-[Documentation Overview](README)
+[Documentation Overview](README.md)

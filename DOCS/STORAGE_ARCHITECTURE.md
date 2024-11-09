@@ -140,7 +140,6 @@ RelationRStorage: {
 [to top](#storage-architecture)
 
 ### Other Storage Fundamentals
-#### EntityTypeID
 * EntityIDMax          
   * Definition: 
     * `map[int]int`
@@ -243,4 +242,4 @@ type Transport struct {
 By understanding this core structure, you can effectively utilize the storage system to model complex data relationships and perform efficient queries and updates.
 
 [to top](#storage-architecture) - 
-[Docuemntation Overview](./README)
+[Docuemntation Overview](./README.md)

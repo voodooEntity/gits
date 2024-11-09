@@ -22,17 +22,20 @@
 ## Key Features
 - Full in-memory handling
 - Concurrency safe and optimized for multithreading applications
+- Easy integration as a standalone library
+- No third party dependencies
+- Simple builder based query language (json compatible)
+- Option to create/map nested structures at once (json compatible)
 - Native directed graph structure support
 - Full access via direct storage api
-- Simple builder based query language (json compatible)
 - Supports multiple parallel storages (factory)
 - Global accessibility of storage index
-- No third party dependencies
-- Option to map nested structures at once (json compatible)
 
 
 ## About
-<span style="color:#35b9e9">GITS</span> has been developed in order to enable developers to easily handle complex data structures in their golang applications without having to worry about concurrency. Due to the nature of <span style="color:#35b9e9">GITS</span> handling all storage and operations in memory, it allows for very fast processing of large amounts of datasets and structures. The library also is designed for multithreading purposes and therefor full concurrency safe. While providing a simple  query interface, which probably suits most of the use cases, <span style="color:#35b9e9">GITS</span> also exposes the storage API so the developer can optimize his application without any restrictions.
+GITS is designed to simplify the management of complex data structures in Go applications, eliminating the need for manual concurrency handling. By storing and operating on data entirely in memory, GITS enables rapid processing of large datasets and intricate structures. The library is inherently thread-safe, making it suitable for multithreaded environments.
+
+While offering a straightforward query interface for most use cases, GITS also exposes an underlying storage API for advanced optimization. This flexibility allows GITS to accommodate a broad spectrum of applications, from high-performance in-memory object storage to intricate information network mapping.
 
 ## Use Cases
 The following use cases are example either applications in which i used GITS or ideas that came to my mind in which using GITS could be beneficial. Apart from that, GITS can be used in any environment that can benefit from the features it provides.
@@ -59,7 +62,7 @@ go get github.com/voodooEntity/gits@0.9.1
 ### Usage
 The following examples provide a sneak peak into the usage of GITS. For a more detailed overview please [visit the documentation](DOCS/README.md).
 
-#### Create an instance
+#### Creating an instance
 To use GITS first we need to create a new instance
 ```go
 myGitsInstance := gits.NewInstance("main")
@@ -104,7 +107,7 @@ type TransportRelation struct {
 }
 ```
 
-#### Create new data
+#### Creating new data
 To make creating new data as easy as possible, GITS provides the "MapData" method which only needs to be provided with an instance of transport.TransportEntity and will take care of the rest. 
 ```go
 rootIntID := myGitsInstance.MapData(transport.TransportEntity{
@@ -128,7 +131,7 @@ As you can see in the example, we are passing a nested structure to the MapTrans
 
 For more detailed information on the capabilities of MapTransport please check "MapTransport Examples & Details" addlink
 
-#### Use the Query language
+#### Using the Query Builder
 The most simple way to access data in a GITS storage is to use the inbuilt query language builder. While the GITS custom query builder options may be limited, they include the most important options to cover a wide range of use cases. 
 
 An example of how to use it to read the previously mapped data
@@ -151,8 +154,8 @@ result := qryAdapter.Execute(finalQuery)
 For more information please refer to ["Query Language Reference and Examples"](DOCS/QUERY.md)
 
 
-#### Use store API
-While it is recommended to primary use the query language when accessing the storage, you are always able to directly interact with the storage.
+#### Using the Storage API
+While it is recommended to primary use the query builder when accessing the storage, you are always able to directly interact with the storage.
 
 To access the storage you simply call
 ```go
@@ -165,6 +168,8 @@ allEntityTypes := storageInstance.GetEntityTypes()
 
 For more information please refer to ["Storage API Reference and Examples"](DOCS/STORAGE_API.md)
 
+#### Understanding the Storage Architecture
+While GITS is designed for optimal performance through in-memory handling and optimized indexing, understanding the underlying storage architecture can further enhance its usage. For a detailed explanation of this architecture, please refer to the following documentation: [Storage Architecture](DOCS/STORAGE_ARCHITECTURE.md)
 
 ## Roadmap
 The following list contains topics that will be the focus of future major updates. This list is not ordered. 
@@ -195,7 +200,7 @@ The following list contains topics that will be the focus of future major update
 [Full Changelog](CHANGELOG.md) - [Latest Release](https://github.com/voodooEntity/gits/releases/tag/0.9.1)
 
 ## License
-[Apache License Version 2.0](./LICENSE)
+[GNU General Public License v3.0](./LICENSE)
 
 ---
 

@@ -1,9 +1,9 @@
 # Creating/Mapping Data
-The easiest and recommended way in GITS to add new data to your storage is to use the *MapData* method available on your [gits.Gits Instance](INSTANCES.md).
+The easiest and recommended way in GITS to add new data to your storage is to use the *MapData* method available on your [gits.Gits Instance](INSTANCES.md). 
 
 While this method can be used to store a single dataset, it can also be used to store multiple depth of nested datasets at once.
 
-At this point it is recommended to have a look at the [transport.Transport* struct definitions](STORAGE_ARCHITECTURE.md).
+At this point it is recommended to have a look at the [transport.Transport* struct definitions](STORAGE_ARCHITECTURE.md#transport-definitions).
 
 ## Index
 * [Examples](#examples)
@@ -164,4 +164,4 @@ A: No, MapData is only able to create new and/or map inbetween new and existing 
 
 
 [top](#creatingmapping-data) - 
-[Documentation Overview](README)
+[Documentation Overview](README.md)
