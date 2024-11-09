@@ -168,6 +168,8 @@ allEntityTypes := storageInstance.GetEntityTypes()
 
 For more information please refer to ["Storage API Reference and Examples"](DOCS/STORAGE_API.md)
 
+#### Understanding the Storage Architecture
+While GITS is designed for optimal performance through in-memory handling and optimized indexing, understanding the underlying storage architecture can further enhance its usage. For a detailed explanation of this architecture, please refer to the following documentation: [Storage Architecture](DOCS/STORAGE_ARCHITECTURE.md)
 
 ## Roadmap
 The following list contains topics that will be the focus of future major updates. This list is not ordered. 
