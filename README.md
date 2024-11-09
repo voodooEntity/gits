@@ -154,7 +154,7 @@ result := qryAdapter.Execute(finalQuery)
 For more information please refer to ["Query Language Reference and Examples"](DOCS/QUERY.md)
 
 
-#### Use store API
+#### Use the Storege API
 While it is recommended to primary use the query language when accessing the storage, you are always able to directly interact with the storage.
 
 To access the storage you simply call
