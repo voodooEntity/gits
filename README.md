@@ -6,7 +6,7 @@
   <br>
 </h1>
 
-<h4 align="center">A <span style="color:#35b9e9">G</span>raph <span style="color:#35b9e9">I</span>n-memory <span style="color:#35b9e9">T</span>hread-safe <span style="color:#35b9e9">S</span>torage for easy and fast concurrency safe data handling.</h4>
+<h4 align="center">A <span style="color:#35b9e9">G</span>raph <span style="color:#35b9e9">I</span>n-memory <span style="color:#35b9e9">T</span>hread-safe <span style="color:#35b9e9">S</span>torage library for easy and fast concurrency safe data handling.</h4>
 
 
 <p align="center">
