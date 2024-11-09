@@ -179,8 +179,6 @@ The following list contains topics that will be the focus of future major update
   - The current return format for linked data is nested struct instances. While this is very comfortable to work with, it also has certain limitations. Therefor it should also be possible to get the return in a flat format.
 - [ ] Enhance test coverage
   - As for now, only the query builder/parser is fully tested. This should be extended to cover as much code as (usefully) possible.
-- [ ] Reimplement data persistence capabilities
-  - In the past GITS had an in-build custom persistence storage which has been removed. Instead there should be the option to add an adapter for existing persistent storages like pg, mysql or any other. 
 
 
 ## Changelog
