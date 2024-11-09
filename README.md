@@ -155,7 +155,7 @@ For more information please refer to ["Query Language Reference and Examples"](D
 
 
 #### Using the Storage API
-While it is recommended to primary use the query language when accessing the storage, you are always able to directly interact with the storage.
+While it is recommended to primary use the query builder when accessing the storage, you are always able to directly interact with the storage.
 
 To access the storage you simply call
 ```go
