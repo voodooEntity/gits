@@ -22,17 +22,20 @@
 ## Key Features
 - Full in-memory handling
 - Concurrency safe and optimized for multithreading applications
+- Easy integration as a standalone library
+- No third party dependencies
+- Simple builder based query language (json compatible)
+- Option to create/map nested structures at once (json compatible)
 - Native directed graph structure support
 - Full access via direct storage api
-- Simple builder based query language (json compatible)
 - Supports multiple parallel storages (factory)
 - Global accessibility of storage index
-- No third party dependencies
-- Option to map nested structures at once (json compatible)
 
 
 ## About
-<span style="color:#35b9e9">GITS</span> has been developed in order to enable developers to easily handle complex data structures in their golang applications without having to worry about concurrency. Due to the nature of <span style="color:#35b9e9">GITS</span> handling all storage and operations in memory, it allows for very fast processing of large amounts of datasets and structures. The library also is designed for multithreading purposes and therefor full concurrency safe. While providing a simple  query interface, which probably suits most of the use cases, <span style="color:#35b9e9">GITS</span> also exposes the storage API so the developer can optimize his application without any restrictions.
+GITS is designed to simplify the management of complex data structures in Go applications, eliminating the need for manual concurrency handling. By storing and operating on data entirely in memory, GITS enables rapid processing of large datasets and intricate structures. The library is inherently thread-safe, making it suitable for multithreaded environments.
+
+While offering a straightforward query interface for most use cases, GITS also exposes an underlying storage API for advanced optimization. This flexibility allows GITS to accommodate a broad spectrum of applications, from high-performance in-memory object storage to intricate information network mapping.
 
 ## Use Cases
 The following use cases are example either applications in which i used GITS or ideas that came to my mind in which using GITS could be beneficial. Apart from that, GITS can be used in any environment that can benefit from the features it provides.
@@ -195,7 +198,7 @@ The following list contains topics that will be the focus of future major update
 [Full Changelog](CHANGELOG.md) - [Latest Release](https://github.com/voodooEntity/gits/releases/tag/0.9.1)
 
 ## License
-[Apache License Version 2.0](./LICENSE)
+[GNU General Public License v3.0](./LICENSE)
 
 ---
 

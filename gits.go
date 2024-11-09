@@ -17,7 +17,7 @@ type Gits struct {
 	Name    string
 	storage *storage.Storage
 	logs    log.Logger
-	//config  *config.Config
+	//config  *config.Config ### todo consider config
 }
 
 func NewInstance(name string) *Gits {
@@ -42,11 +42,12 @@ func SetDefault(name string) {
 	instances.SetDefault(name)
 }
 
-func RemoveInstance(name string) {
-	instances.Remove(name)
+func defunc_RemoveInstance(name string) {
+	instances.defunc_Remove(name)
 	return
 }
 
+// deprecated -> use query adapter New() instead
 func NewQuery() *query.Query {
 	return query.New()
 }
@@ -123,7 +124,7 @@ func (ii instanceIndex) GetByName(name string) *Gits {
 	return ret
 }
 
-func (ii instanceIndex) Remove(name string) {
+func (ii instanceIndex) defunc_Remove(name string) {
 	instanceMutex.Lock()
 	if _, ok := instances[name]; !ok {
 		fmt.Println("Cant remove non existing instance")
