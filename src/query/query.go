@@ -45,7 +45,7 @@ type Query struct {
 	Method             int
 	Pool               []string
 	Conditions         [][][3]string
-	Map                []Query
+	Map                []*Query
 	Mode               [][]string
 	Values             map[string]string
 	currConditionGroup int
@@ -159,28 +159,28 @@ func (self *Query) OrMatch(alpha string, operator string, beta string) *Query {
 func (self *Query) To(query *Query) *Query {
 	query.setDirection(DIRECTION_CHILD)
 	query.Required = true
-	self.Map = append(self.Map, *query)
+	self.Map = append(self.Map, query)
 	return self
 }
 
 func (self *Query) From(query *Query) *Query {
 	query.setDirection(DIRECTION_PARENT)
 	query.Required = true
-	self.Map = append(self.Map, *query)
+	self.Map = append(self.Map, query)
 	return self
 }
 
 func (self *Query) CanTo(query *Query) *Query {
 	query.setDirection(DIRECTION_CHILD)
 	query.Required = false
-	self.Map = append(self.Map, *query)
+	self.Map = append(self.Map, query)
 	return self
 }
 
 func (self *Query) CanFrom(query *Query) *Query {
 	query.setDirection(DIRECTION_PARENT)
 	query.Required = false
-	self.Map = append(self.Map, *query)
+	self.Map = append(self.Map, query)
 	return self
 }
 
@@ -314,7 +314,7 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 			addressPairs = append(addressPairs, collectAddressPairs...)
 		} else { // unlinked data - for now the only case for this is the METHOD_LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
 			for _, targetQuery := range query.Map {
-				tagretBaseMatchList, targetPopertyMatchList := parseConditions(&targetQuery)
+				tagretBaseMatchList, targetPopertyMatchList := parseConditions(targetQuery)
 				_, tmpLinkAddresses, tmpLinkAmount := store.GetEntitiesByQueryFilter(targetQuery.Pool, targetQuery.Conditions, tagretBaseMatchList[FILTER_ID], tagretBaseMatchList[FILTER_VALUE], tagretBaseMatchList[FILTER_CONTEXT], targetPopertyMatchList, false)
 				if 0 < tmpLinkAmount {
 					linkAddresses[targetQuery.Direction] = append(linkAddresses[targetQuery.Direction], tmpLinkAddresses...)
@@ -385,14 +385,14 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 	return transport.Transport{}
 }
 
-func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddress [2]int, addressPairList [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
+func recursiveExecuteLinked(store *storage.Storage, queries []*Query, sourceAddress [2]int, addressPairList [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
 	var retParents []transport.TransportRelation
 	var retChildren []transport.TransportRelation
 	i := 0
 	for _, query := range queries {
 		var tmpRet []transport.TransportRelation
 		// parse the conditions into our 2 necessary groups
-		baseMatchList, propertyMatchList := parseConditions(&query)
+		baseMatchList, propertyMatchList := parseConditions(query)
 
 		// do we need to return the data itself?
 		returnDataFlag := false
@@ -466,7 +466,7 @@ func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddre
 			}
 			start := len(*appender)
 			*appender = append(*appender, tmpRet...)
-			if direction, depth, ok := isTraversed(query); ok {
+			if direction, depth, ok := isTraversed(*query); ok {
 				for i := start; i < start+tmpRetLen; i++ {
 					store.TraverseEnrich(&((*appender)[i].Target), direction, depth)
 				}

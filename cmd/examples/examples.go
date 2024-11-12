@@ -786,12 +786,3 @@ func printResult(result transport.Transport) {
 	}
 	fmt.Println(string(jsonData))
 }
-
-func printQuery(qry query.Query) {
-	jsonData, err := json.MarshalIndent(qry, "", "  ")
-	if err != nil {
-		fmt.Println("Error encoding JSON:", err)
-		return
-	}
-	fmt.Println(string(jsonData))
-}
