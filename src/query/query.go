@@ -291,6 +291,16 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 				// recursive execute our actions
 				children, parents, tmpAddressPairs, amount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairs)
 
+				// make sure required subquery actually returns data
+				// this doesnt check if required ones are included
+				// only if any relations are given - but the recursive
+				// method will return no datasets if a required map
+				// is not fit so it should be fine - revalidate later ###
+				if query.HasRequiredSubQueries() && amount == 0 {
+					mutexh.Release()
+					return transport.Transport{}
+				}
+
 				// append the current addresspairs since it can be used for unlinking or other funny stuff
 				collectAddressPairs = append(collectAddressPairs, tmpAddressPairs...) // i dont like it but ok for now ### todo overthink
 				// now if given store children and parents entities
@@ -303,7 +313,7 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 				//archivist.Info("addressPairs", tmpAddressPairs)
 
 				// are there any results?
-				if 0 < amount || !query.HasRequiredSubQueries() {
+				if 0 < amount || !query.HasRequiredSubQueries() { // revalidate the !query.HasRequired... case ###
 					ret.Amount++
 					// do we have any data to add? (and it is a read)
 					if METHOD_READ == query.Method {
