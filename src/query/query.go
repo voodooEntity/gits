@@ -289,16 +289,15 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 			collectAddressPairs := [][4]int{}
 			for key, entityAddress := range resultAddresses {
 				// recursive execute our actions
-				children, parents, tmpAddressPairs, amount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairs)
+				children, parents, tmpAddressPairs, subAmount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairs)
 
 				// make sure required subquery actually returns data
 				// this doesnt check if required ones are included
 				// only if any relations are given - but the recursive
 				// method will return no datasets if a required map
 				// is not fit so it should be fine - revalidate later ###
-				if query.HasRequiredSubQueries() && amount == 0 {
-					mutexh.Release()
-					return transport.Transport{}
+				if query.HasRequiredSubQueries() && subAmount == 0 {
+					continue
 				}
 
 				// append the current addresspairs since it can be used for unlinking or other funny stuff
