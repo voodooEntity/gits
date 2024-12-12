@@ -124,7 +124,7 @@ func (ii instanceIndex) GetByName(name string) *Gits {
 	return ret
 }
 
-func (ii instanceIndex) defunc_Remove(name string) {
+func (ii instanceIndex) Remove(name string) {
 	instanceMutex.Lock()
 	if _, ok := instances[name]; !ok {
 		fmt.Println("Cant remove non existing instance")
