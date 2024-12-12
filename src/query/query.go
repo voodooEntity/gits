@@ -218,6 +218,11 @@ func (self *Query) TraverseIn(depth int) *Query {
 	return self
 }
 
+func (self *Query) Limit(amount int) *Query {
+	self.Mode = append(self.Mode, []string{"Limit", strconv.Itoa(amount)})
+	return self
+}
+
 func Execute(store *storage.Storage, query *Query) transport.Transport {
 	// no type pool = something is very wrong
 	if 0 == len(query.Pool) {
@@ -373,6 +378,17 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 		// do we have to sort?
 		if (Order{}) != query.Sort {
 			ret.Entities = sortResults(ret.Entities, query.Sort.Field, query.Sort.Direction, query.Sort.Mode)
+		}
+
+		// finally check if we need to reduce due to given limit
+		// not the optimal implementation in terms of resource usage
+		// because if there is no order we could limit earlier in the query
+		// process but for now we gonne run with this solution ### revisit
+		limit := getLimitIfExists(*query)
+		if -1 != limit {
+			if len(ret.Entities) > limit {
+				ret.Entities = ret.Entities[:limit]
+			}
 		}
 
 		// release all the mutex and provide the data
@@ -577,6 +593,22 @@ func isTraversed(qry Query) (int, int, bool) {
 		}
 	}
 	return -1, -1, false
+}
+
+func getLimitIfExists(qry Query) int {
+	if nil != qry.Mode {
+		for _, mode := range qry.Mode {
+			tmpLen := len(mode)
+			if 0 < tmpLen && "Limit" == mode[0] {
+				limit, err := strconv.Atoi(mode[1])
+				if nil != err {
+					return -1
+				}
+				return limit
+			}
+		}
+	}
+	return -1
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -

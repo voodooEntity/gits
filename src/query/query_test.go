@@ -893,6 +893,44 @@ func TestRequiredQueryJoinInDepthFail(t *testing.T) {
 	})
 }
 
+func TestLimitApplies(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		testStorage.MapTransportData(transport.TransportEntity{
+			ID:      -1,
+			Value:   "Something" + strconv.Itoa(i),
+			Context: "test",
+			Type:    "Alpha",
+		})
+	}
+	qry := New().Read("Alpha").Limit(4)
+	ret := Execute(testStorage, qry)
+	if 4 != len(ret.Entities) {
+		t.Error("wrong result format", ret)
+	}
+	t.Cleanup(func() {
+		Cleanup()
+	})
+}
+
+func TestLimitButLessDatasets(t *testing.T) {
+	for i := 0; i < 5; i++ {
+		testStorage.MapTransportData(transport.TransportEntity{
+			ID:      -1,
+			Value:   "Something" + strconv.Itoa(i),
+			Context: "test",
+			Type:    "Alpha",
+		})
+	}
+	qry := New().Read("Alpha").Limit(10)
+	ret := Execute(testStorage, qry)
+	if 5 != len(ret.Entities) {
+		t.Error("wrong result format", ret)
+	}
+	t.Cleanup(func() {
+		Cleanup()
+	})
+}
+
 func TestRequiredQueryJoinInDepthSuccess(t *testing.T) {
 	testdata := mapQbStructureMap()
 	testStorage.MapTransportData(testdata)
