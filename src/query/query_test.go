@@ -3,11 +3,12 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"testing"
+
 	"github.com/voodooEntity/gits/src/storage"
 	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
-	"strconv"
-	"testing"
 )
 
 var testStorage *storage.Storage
@@ -1144,6 +1145,102 @@ func TestOrderByAlphabeticalValueDesc(t *testing.T) {
 	t.Cleanup(func() {
 		Cleanup()
 	})
+}
+
+func TestUpdateWithRequiredSubqueryFilter(t *testing.T) {
+	initStorage()
+	defer Cleanup()
+
+	// Create entity types
+	userTypeID, _ := testStorage.CreateEntityType("User")
+	orderTypeID, _ := testStorage.CreateEntityType("Order")
+
+	// Create UserA (should be updated)
+	userA_ID, _ := testStorage.CreateEntity(types.StorageEntity{
+		Type:       userTypeID,
+		Value:      "UserA",
+		Context:    "TestUpdateBug",
+		Properties: map[string]string{"Status": "Active"},
+	})
+	order1_ID, _ := testStorage.CreateEntity(types.StorageEntity{
+		Type:       orderTypeID,
+		Value:      "Order101",
+		Context:    "ForUserA",
+		Properties: map[string]string{"Amount": "150"},
+	})
+	testStorage.CreateRelationUnsafe(userTypeID, userA_ID, orderTypeID, order1_ID, types.StorageRelation{
+		SourceType: userTypeID, SourceID: userA_ID, TargetType: orderTypeID, TargetID: order1_ID,
+	})
+
+	// Create UserB (should NOT be updated)
+	userB_ID, _ := testStorage.CreateEntity(types.StorageEntity{
+		Type:       userTypeID,
+		Value:      "UserB",
+		Context:    "TestUpdateBug",
+		Properties: map[string]string{"Status": "Active"},
+	})
+	order2_ID, _ := testStorage.CreateEntity(types.StorageEntity{
+		Type:       orderTypeID,
+		Value:      "Order102",
+		Context:    "ForUserB",
+		Properties: map[string]string{"Amount": "50"}, // Amount not > 100
+	})
+	testStorage.CreateRelationUnsafe(userTypeID, userB_ID, orderTypeID, order2_ID, types.StorageRelation{
+		SourceType: userTypeID, SourceID: userB_ID, TargetType: orderTypeID, TargetID: order2_ID,
+	})
+
+	// Create UserC (should also NOT be updated, matches root but no orders)
+	testStorage.CreateEntity(types.StorageEntity{
+		Type:       userTypeID,
+		Value:      "UserC",
+		Context:    "TestUpdateBugNoOrders",
+		Properties: map[string]string{"Status": "Active"},
+	})
+
+	// Update query: Update Users with Status "Active" who have an Order with Amount > 100
+	updateQry := New().Update("User").
+		Match("Properties.Status", "==", "Active").
+		Set("Properties.Status", "Processed").
+		To(New().Reduce("Order").Match("Properties.Amount", ">", "100"))
+
+	updateResult := Execute(testStorage, updateQry)
+
+	// Assertions
+	// Check UserA
+	userAResult := Execute(testStorage, New().Read("User").Match("Value", "==", "UserA"))
+	if len(userAResult.Entities) != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter: Expected 1 UserA, got %d", len(userAResult.Entities))
+	} else if userAResult.Entities[0].Properties["Status"] != "Processed" {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter: Expected UserA Status to be 'Processed', got '%s'", userAResult.Entities[0].Properties["Status"])
+	}
+
+	// Check UserB
+	userBResult := Execute(testStorage, New().Read("User").Match("Value", "==", "UserB"))
+	if len(userBResult.Entities) != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter: Expected 1 UserB, got %d", len(userBResult.Entities))
+	} else if userBResult.Entities[0].Properties["Status"] != "Active" {
+		// This is the crucial assertion for the bug
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter: Expected UserB Status to remain 'Active', got '%s'. BUG PRESENT.", userBResult.Entities[0].Properties["Status"])
+	}
+
+	// Check UserC
+	userCResult := Execute(testStorage, New().Read("User").Match("Value", "==", "UserC"))
+	if len(userCResult.Entities) != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter: Expected 1 UserC, got %d", len(userCResult.Entities))
+	} else if userCResult.Entities[0].Properties["Status"] != "Active" {
+		// This also tests the bug: UserC matches root but fails subquery
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter: Expected UserC Status to remain 'Active', got '%s'. BUG PRESENT.", userCResult.Entities[0].Properties["Status"])
+	}
+
+	// Check the amount returned by the Update operation
+	// If the bug exists, ret.Amount might be 1 (for UserA), but more users were updated.
+	// If the fix is applied, ret.Amount should be 1.
+	// The current code in query.go calculates ret.Amount correctly based on filtered entities.
+	// The bug is that BatchUpdateAddressList uses the unfiltered list.
+	// So, updateResult.Amount should reflect the count of *correctly* updatable entities.
+	if updateResult.Amount != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter: Update operation reported affecting %d entities, expected 1", updateResult.Amount)
+	}
 }
 
 func Cleanup() {
