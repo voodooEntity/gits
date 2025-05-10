@@ -2,11 +2,12 @@ package gits
 
 import (
 	"fmt"
+	"log"
+	"sync"
+
 	"github.com/voodooEntity/gits/src/query"
 	"github.com/voodooEntity/gits/src/storage"
 	"github.com/voodooEntity/gits/src/transport"
-	"log"
-	"sync"
 )
 
 var instances = make(instanceIndex)
@@ -43,7 +44,7 @@ func SetDefault(name string) {
 }
 
 func defunc_RemoveInstance(name string) {
-	instances.defunc_Remove(name)
+	instances.Remove(name)
 	return
 }
 

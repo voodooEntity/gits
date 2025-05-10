@@ -40,14 +40,29 @@ The GITS Query Language is a custom implementation optimized for the usage with 
 * **Read(etype ...string)**:Sets the query type to read entities of the specified type(s).
 * **Reduce(etype ...string)**: Sets the query type to reduce entities of the specified type(s) (used in joins to reduce the results).
 * **Update(etype ...string)**: Sets the query type to update entities of the specified type(s). Is only supported as root query.
+  - **Important Note on Joins**: When an `Update` query includes required joins (using `To()` or `From()`), the update operation will only be performed if **all** entities initially matched by the query's primary filters also satisfy **all** specified required join conditions. If even one entity fails to meet a required join, the entire update operation is aborted, and no entities are modified. Optional joins (`CanTo()`, `CanFrom()`) do not trigger this all-or-nothing behavior.
 * **Delete(etype ...string)**: Sets the query type to delete entities of the specified type(s). Is only supported as root query.
 * **Link(etype ...string)**: Sets the query type to create links between entities of the specified type(s). Is only supported as root query.
 * **Unlink(etype ...string)**: Sets the query type to remove links between entities of the specified type(s). Is only supported as root query.
 * **Find(etype ...string)**: Sets the query type to find entities of the specified type(s). Is used in context of "Link()" and "Unlink()"
 
-**3. Filtering and Matching**
-* **Match(alpha string, operator string, beta string)**: Adds a condition to the query. The condition can be based on entity value, context, id or properties. Multiple match queries will be assumed as "AND".
-* **OrMatch(alpha string, operator string, beta string)**: Adds an OR condition to the query match definitions. 
+**3. Link/Unlink Specific Methods**
+* **WithRelationContext(context string) *Query**: (For `Link` queries) Specifies the `Context` for the new relations to be created.
+* **WithRelationProperty(key string, value string) *Query**: (For `Link` queries) Specifies a single `Property` (key-value pair) for the new relations.
+* **WithRelationProperties(properties map[string]string) *Query**: (For `Link` queries) Specifies multiple `Properties` for the new relations.
+* **MatchingRelationContext(context string) *Query**: (For `Unlink` queries) Filters relations to be unlinked based on their `Context`. Only relations matching this context will be considered for deletion.
+* **MatchingRelationProperty(key string, operator string, value string) *Query**: (For `Unlink` queries) Filters relations to be unlinked based on a specific `Property`. Only relations whose property matches the given key, operator, and value will be considered.
+
+**4. Filtering and Matching**
+* **Filter(condition cond.Condition)**: Sets the root condition for the query using a flexible condition tree. This is the **recommended** way for all new filtering logic.
+  - Conditions are built using the helper package `github.com/voodooEntity/gits/src/query/cond`.
+  - Builders include `cond.Match(field, operator, value string) *cond.MatchCondition`, `cond.And(operands ...cond.Condition) *cond.ConditionGroup`, and `cond.Or(operands ...cond.Condition) *cond.ConditionGroup`.
+  - Both `MatchCondition` and `ConditionGroup` have a `SetNegated(bool) cond.Condition` method to negate the condition (e.g., `cond.Match(...).SetNegated(true)`).
+  - This allows for arbitrarily complex and nested AND/OR/NOT logic.
+  - **If `Filter()` is used, any conditions set by legacy `Match()` or `OrMatch()` methods on the same query object are ignored.**
+* **Match(alpha string, operator string, beta string)** (Legacy): Adds an AND condition to the query. The condition can be based on entity value, context, id or properties. Multiple `Match()` calls create an AND group.
+* **OrMatch(alpha string, operator string, beta string)** (Legacy): Adds an OR condition group to the query. Subsequent `Match()` calls will apply to this new OR group.
+  - *Note: `Match` and `OrMatch` are considered legacy. For new development, prefer `Filter()` for its enhanced capabilities and clarity.*
 
 **4. Defining Relationships**
 * **To(query *Query)**: Adds a child query to the current query.
@@ -304,12 +319,52 @@ This query reads all entities of type "Alpha" where both the "Value" and "Contex
 }
 ```
 
-### 7. Combining filters with OR Condition
+### 7. Combining Filters with Complex Logic (using `Filter`)
+The new `Filter()` method allows for arbitrarily complex and nested conditions.
+
+**Example: (Context == "Ctx1" AND Properties.Status == "Active") OR Value == "ValD"**
 ```go
-qry := qa.New().Read("Alpha").Match("Context", "==", "Lorem").Match("Value", "==", "someValue").OrMatch("Context", "==", "ipsum").Match("Value", "==", "finally")
+import . "github.com/voodooEntity/gits/src/query/cond" // Or your chosen alias
+
+// ...
+qry := qa.New().Read("ComplexType").Filter(
+    Or(
+        And(
+            Match("Context", "==", "Ctx1"),
+            Match("Properties.Status", "==", "Active"),
+        ),
+        Match("Value", "==", "ValD"),
+    ),
+)
 result := qa.Execute(qry)
 ```
-This query reads all entities of type "Alpha" where either ("Context" equals "Lorem" and "Value" equals "someValueA") OR ("Context" equals "ipsum" and "Value" equals "finally"). While multiple consecutive match conditions are assumed as AND, adding an "OrMatch()" will split the previous and following into different groups. You are allowed to use as many "OrMatch" as you need. Nesting of conditions is not supported right now.  [List of supported matching operators](#supported-match-operators)
+This query reads entities of type "ComplexType" where either:
+- The `Context` is "Ctx1" AND the property "Status" is "Active".
+- OR the `Value` is "ValD".
+
+**Example: Context == "Ctx2" AND NOT (Properties.Status == "Inactive")**
+```go
+import . "github.com/voodooEntity/gits/src/query/cond"
+
+// ...
+qry := qa.New().Read("ComplexType").Filter(
+    And(
+        Match("Context", "==", "Ctx2"),
+        Match("Properties.Status", "==", "Inactive").SetNegated(true), // Negates this specific match
+    ),
+)
+result := qa.Execute(qry)
+```
+This query reads entities of type "ComplexType" where:
+- The `Context` is "Ctx2".
+- AND the property "Status" is NOT "Inactive".
+
+**Legacy `Match` and `OrMatch` (Example from previous versions):**
+```go
+// qry := qa.New().Read("Alpha").Match("Context", "==", "Lorem").Match("Value", "==", "someValue").OrMatch("Context", "==", "ipsum").Match("Value", "==", "finally")
+// result := qa.Execute(qry)
+```
+This legacy approach reads entities of type "Alpha" where either ("Context" equals "Lorem" AND "Value" equals "someValue") OR ("Context" equals "ipsum" AND "Value" equals "finally"). While `Match` and `OrMatch` still function for backward compatibility, `Filter()` is recommended for new queries due to its superior flexibility in constructing complex, nested conditions. [List of supported matching operators](#supported-match-operators)
 ```json
 {
   "Entities": [
@@ -1014,10 +1069,14 @@ This query reads all entities of type "Entity", than it will traverse out (follo
 qry := qa.New().Update("Alpha").Match("Value","==","old").Set("Value", "Lorem").Set("Context", "Ipsum").Set("Properties.dolor","appropinquare")
 result := qa.Execute(qry)
 ```
-This query will update all entities of type "Alpha" which match ("Value" equals "old"). It will update "Context" to "Ipsum", "Value" to "Lorem" and the Property "dolor" to "appropinquare". This can affect a single or multiple entities, based on your filters. Update query must always be a root level query. Update can be used with "(Can)To" and "(Can)From" in order to reduce/filter the affected datasets. It is recommended to use "Reduce()" instead of "Read()" in such subqueries to minimize the amount of allocated memory.
+This query will update all entities of type "Alpha" which match ("Value" equals "old"). It will update "Context" to "Ipsum", "Value" to "Lorem" and the Property "dolor" to "appropinquare". This can affect a single or multiple entities, based on your filters. Update query must always be a root level query.
+When using joins with an `Update` query:
+- Optional joins (`CanTo()`, `CanFrom()`) can be used to further refine which entities are considered, but they do not prevent the update if not met.
+- **Required joins (`To()`, `From()`) impose a stricter condition: the update operation will only proceed if *all* entities initially matched by the query's primary filters also satisfy *all* specified required join conditions. If any entity fails a required join, the entire update is aborted, and no changes are made.**
+It is recommended to use "Reduce()" instead of "Read()" in join subqueries to minimize the amount of allocated memory.
 ```json
 // an update query will not return any entity datasets. The amount indicates 
-// the amount of updated datasets 
+// the amount of updated datasets (or 0 if a required join condition was not met by all entities).
 {
   "Entities": null,
   "Relations": null,
@@ -1045,13 +1104,18 @@ This query will delete all entities of type "Alpha" which match ("Context" equal
 ```go
 qry := qa.New().Link("Alpha").Match("Value", "==", "psi").To(
     qa.New().Find("Beta").Match("Value", "==", "omega"),
-)
+).WithRelationContext("membership").WithRelationProperty("status", "active")
 qa.Execute(qry)
 ```
-This query will find all entities of type "Alpha" which match "Value" equals "psi" and link (create a directed relation) the result list to result of the join which matches entities of type "Beta" with "Value" equals "omega". This means it creates a Relation from each Source to each Target found. As you can see the "To" definition is used in this context to define the direction of the "Link" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our link function. You can use this to link any amount of entities. Link query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be created, it is not possible to use those as pure filter right now.  
+This query will find all entities of type "Alpha" which match "Value" equals "psi" and link (create a directed relation) them to entities of type "Beta" with "Value" equals "omega".
+The newly created relations will have a `Context` of "membership" and a `Property` "status" set to "active".
+- The "To" definition is used to define the direction of the "Link" action (towards children).
+- "Find" is used in the sub-query to identify target entities for linking.
+- `WithRelationContext()` and `WithRelationProperty()` (or `WithRelationProperties()`) are used to define attributes for the new relations.
+Link query must always be a root level query.
 ```json
 // a link query will not return any entity datasets. The amount indicates 
-// the amount of source datasets on root level that have been linked  
+// the amount of newly created relations.
 {
   "Entities": null,
   "Relations": null,
@@ -1064,13 +1128,18 @@ This query will find all entities of type "Alpha" which match "Value" equals "ps
 ```go
 qry := qa.New().Unlink("Alpha").Match("Value", "==", "psi").To(
     qa.New().Find("Beta").Match("Context", "==", "omega"),
-)
+).MatchingRelationContext("old_membership").MatchingRelationProperty("status", "==", "inactive")
 qa.Execute(qry)
 ```
-This query will find all entities of type "Alpha" which match "Value" equals "psi" and unlink (remove a directed relation) the result list to result of the join which matches entities of type "Beta" with "Context" equals "omega". As you can see the "To" definition is used in this context to define the direction of the "Unlink" action, in this case towards children. Also we use "Find" instead of "Read or Reduce" in order to provide the necessary dataset address list to our unlink function. You can use this to unlink any amount of entities. Unlink query must always be a root level query. Since Link uses the target list of "To()" and "From()" results to determine where the links should be deleted, it is not possible to use those as pure filter right now.
+This query will find all entities of type "Alpha" which match "Value" equals "psi". It will then identify relations to entities of type "Beta" with "Context" equals "omega".
+However, only those relations that ALSO have a `Context` of "old_membership" AND a `Property` "status" equal to "inactive" will be unlinked (removed).
+- The "To" definition defines the direction of the "Unlink" action.
+- "Find" is used in the sub-query to identify potential target entities.
+- `MatchingRelationContext()` and `MatchingRelationProperty()` are used to precisely target which relations to delete.
+Unlink query must always be a root level query.
 ```json
 // an unlink query will not return any entity datasets. The amount indicates 
-// the amount of target datasets that have been unlinked  
+// the amount of relations that have been unlinked.
 {
   "Entities": null,
   "Relations": null,

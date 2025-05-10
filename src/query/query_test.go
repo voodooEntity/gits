@@ -3,11 +3,13 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"testing"
+
+	"github.com/voodooEntity/gits/src/query/cond" // Import for new cond package
 	"github.com/voodooEntity/gits/src/storage"
 	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
-	"strconv"
-	"testing"
 )
 
 var testStorage *storage.Storage
@@ -87,6 +89,508 @@ func TestFilterValueByExcactMatch(t *testing.T) {
 		Cleanup()
 	})
 }
+
+// --- Test Suite for Enhanced Link/Unlink ---
+
+func createTestDataForLinkUnlink() {
+	// Entity Types
+	typeIDUser, _ := testStorage.CreateEntityType("User")
+	typeIDGroup, _ := testStorage.CreateEntityType("Group")
+	typeIDProject, _ := testStorage.CreateEntityType("Project")
+
+	// Entities
+	_, _ = testStorage.CreateEntity(types.StorageEntity{Type: typeIDUser, Value: "User1"})       // ID 1
+	_, _ = testStorage.CreateEntity(types.StorageEntity{Type: typeIDUser, Value: "User2"})       // ID 2
+	_, _ = testStorage.CreateEntity(types.StorageEntity{Type: typeIDGroup, Value: "GroupA"})     // ID 1
+	_, _ = testStorage.CreateEntity(types.StorageEntity{Type: typeIDGroup, Value: "GroupB"})     // ID 2
+	_, _ = testStorage.CreateEntity(types.StorageEntity{Type: typeIDProject, Value: "ProjectX"}) // ID 1
+	_, _ = testStorage.CreateEntity(types.StorageEntity{Type: typeIDProject, Value: "ProjectY"}) // ID 2
+
+	// Initial relations for testing Unlink
+	// User1 -> GroupA (Context: "member", Properties: {"role": "admin", "status": "active"})
+	testStorage.CreateRelationUnsafe(typeIDUser, 1, typeIDGroup, 1, types.StorageRelation{
+		SourceType: typeIDUser, SourceID: 1, TargetType: typeIDGroup, TargetID: 1,
+		Context: "member", Properties: map[string]string{"role": "admin", "status": "active"},
+	})
+	// User1 -> GroupB (Context: "viewer", Properties: {"role": "guest"})
+	testStorage.CreateRelationUnsafe(typeIDUser, 1, typeIDGroup, 2, types.StorageRelation{
+		SourceType: typeIDUser, SourceID: 1, TargetType: typeIDGroup, TargetID: 2,
+		Context: "viewer", Properties: map[string]string{"role": "guest"},
+	})
+	// User2 -> ProjectX (Context: "contributor", Properties: {"permission": "write", "active": "true"})
+	testStorage.CreateRelationUnsafe(typeIDUser, 2, typeIDProject, 1, types.StorageRelation{
+		SourceType: typeIDUser, SourceID: 2, TargetType: typeIDProject, TargetID: 1,
+		Context: "contributor", Properties: map[string]string{"permission": "write", "active": "true"},
+	})
+}
+
+func TestLinkWithContextAndProperties_Success(t *testing.T) {
+	initStorage()
+	createTestDataForLinkUnlink()
+
+	// Link User2 to GroupA with context "manager" and property "level":"senior"
+	linkQry := New().Link("User").Match("Value", "==", "User2").
+		To(New().Find("Group").Match("Value", "==", "GroupA")).
+		WithRelationContext("manager").
+		WithRelationProperty("level", "senior")
+	result := Execute(testStorage, linkQry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected Amount to be 1, got %d", result.Amount)
+	}
+
+	// Verify the relation
+	readQry := New().Read("User").Match("Value", "==", "User2").
+		To(New().Read("Group").Match("Value", "==", "GroupA"))
+	readResult := Execute(testStorage, readQry)
+
+	if readResult.Amount != 1 || len(readResult.Entities[0].ChildRelations) != 1 {
+		t.Fatalf("Expected User2 to be linked to GroupA, got: %+v", readResult)
+	}
+	relation := readResult.Entities[0].ChildRelations[0]
+	if relation.Context != "manager" {
+		t.Errorf("Expected relation context 'manager', got '%s'", relation.Context)
+	}
+	if val, ok := relation.Properties["level"]; !ok || val != "senior" {
+		t.Errorf("Expected relation property 'level':'senior', got '%+v'", relation.Properties)
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestLinkWithMultipleProperties_Success(t *testing.T) {
+	initStorage()
+	createTestDataForLinkUnlink()
+
+	// Link User2 to GroupB with multiple properties
+	linkQry := New().Link("User").Match("Value", "==", "User2").
+		To(New().Find("Group").Match("Value", "==", "GroupB")).
+		WithRelationContext("team_lead").
+		WithRelationProperties(map[string]string{"department": "engineering", "start_date": "2023-01-01"})
+	result := Execute(testStorage, linkQry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected Amount to be 1, got %d", result.Amount)
+	}
+
+	readQry := New().Read("User").Match("Value", "==", "User2").
+		To(New().Read("Group").Match("Value", "==", "GroupB"))
+	readResult := Execute(testStorage, readQry)
+	if readResult.Amount != 1 || len(readResult.Entities[0].ChildRelations) != 1 {
+		t.Fatalf("Expected User2 to be linked to GroupB, got: %+v", readResult)
+	}
+	relation := readResult.Entities[0].ChildRelations[0]
+	if relation.Context != "team_lead" {
+		t.Errorf("Expected relation context 'team_lead', got '%s'", relation.Context)
+	}
+	if relation.Properties["department"] != "engineering" || relation.Properties["start_date"] != "2023-01-01" {
+		t.Errorf("Expected relation properties not found, got '%+v'", relation.Properties)
+	}
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUnlinkMatchingContext_Success(t *testing.T) {
+	initStorage()
+	createTestDataForLinkUnlink() // User1 -> GroupA (member), User1 -> GroupB (viewer)
+
+	// Unlink User1 from GroupA where context is "member"
+	unlinkQry := New().Unlink("User").Match("Value", "==", "User1").
+		To(New().Find("Group").Match("Value", "==", "GroupA")).
+		MatchingRelationContext("member")
+	result := Execute(testStorage, unlinkQry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected Amount to be 1 for unlinked relation, got %d", result.Amount)
+	}
+
+	// Verify User1 is no longer linked to GroupA
+	readQryGA := New().Read("User").Match("Value", "==", "User1").
+		To(New().Read("Group").Match("Value", "==", "GroupA"))
+	readResultGA := Execute(testStorage, readQryGA)
+	if readResultGA.Amount != 0 { // Should be 0 as the link is removed
+		t.Errorf("User1 should no longer be linked to GroupA, but got %d results", readResultGA.Amount)
+	}
+
+	// Verify User1 is still linked to GroupB
+	readQryGB := New().Read("User").Match("Value", "==", "User1").
+		To(New().Read("Group").Match("Value", "==", "GroupB"))
+	readResultGB := Execute(testStorage, readQryGB)
+	if readResultGB.Amount != 1 {
+		t.Errorf("User1 should still be linked to GroupB, got %d results", readResultGB.Amount)
+	}
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUnlinkMatchingContext_FailNotMatching(t *testing.T) {
+	initStorage()
+	createTestDataForLinkUnlink() // User1 -> GroupA (member)
+
+	// Attempt to Unlink User1 from GroupA with non-matching context "non_member"
+	unlinkQry := New().Unlink("User").Match("Value", "==", "User1").
+		To(New().Find("Group").Match("Value", "==", "GroupA")).
+		MatchingRelationContext("non_member")
+	result := Execute(testStorage, unlinkQry)
+
+	if result.Amount != 0 { // No relation should be unlinked
+		t.Errorf("Expected Amount to be 0 as context does not match, got %d", result.Amount)
+	}
+
+	// Verify User1 is still linked to GroupA
+	readQry := New().Read("User").Match("Value", "==", "User1").
+		To(New().Read("Group").Match("Value", "==", "GroupA"))
+	readResult := Execute(testStorage, readQry)
+	if readResult.Amount != 1 {
+		t.Errorf("User1 should still be linked to GroupA, got %d results", readResult.Amount)
+	}
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUnlinkMatchingProperty_Success(t *testing.T) {
+	initStorage()
+	createTestDataForLinkUnlink() // User1 -> GroupA (role:admin), User1 -> GroupB (role:guest)
+
+	// Unlink User1 from GroupA where property role == "admin"
+	unlinkQry := New().Unlink("User").Match("Value", "==", "User1").
+		To(New().Find("Group").Match("Value", "==", "GroupA")).
+		MatchingRelationProperty("role", "==", "admin")
+	result := Execute(testStorage, unlinkQry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected Amount to be 1 for unlinked relation, got %d", result.Amount)
+	}
+
+	// Verify User1 is no longer linked to GroupA
+	readQryGA := New().Read("User").Match("Value", "==", "User1").
+		To(New().Read("Group").Match("Value", "==", "GroupA"))
+	readResultGA := Execute(testStorage, readQryGA)
+	if readResultGA.Amount != 0 {
+		t.Errorf("User1 should no longer be linked to GroupA, got %d results", readResultGA.Amount)
+	}
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUnlinkMatchingProperty_FailNotMatching(t *testing.T) {
+	initStorage()
+	createTestDataForLinkUnlink() // User1 -> GroupA (role:admin)
+
+	// Attempt to Unlink User1 from GroupA with non-matching property role == "user"
+	unlinkQry := New().Unlink("User").Match("Value", "==", "User1").
+		To(New().Find("Group").Match("Value", "==", "GroupA")).
+		MatchingRelationProperty("role", "==", "user")
+	result := Execute(testStorage, unlinkQry)
+
+	if result.Amount != 0 {
+		t.Errorf("Expected Amount to be 0 as property does not match, got %d", result.Amount)
+	}
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUnlinkMatchingMultipleProperties_Success(t *testing.T) {
+	initStorage()
+	createTestDataForLinkUnlink() // User1 -> GroupA (role:admin, status:active)
+
+	unlinkQry := New().Unlink("User").Match("Value", "==", "User1").
+		To(New().Find("Group").Match("Value", "==", "GroupA")).
+		MatchingRelationProperty("role", "==", "admin").
+		MatchingRelationProperty("status", "==", "active")
+	result := Execute(testStorage, unlinkQry)
+	if result.Amount != 1 {
+		t.Errorf("Expected 1 relation to be unlinked, got %d", result.Amount)
+	}
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUnlinkMatchingMultipleProperties_FailOneNotMatching(t *testing.T) {
+	initStorage()
+	createTestDataForLinkUnlink() // User1 -> GroupA (role:admin, status:active)
+
+	unlinkQry := New().Unlink("User").Match("Value", "==", "User1").
+		To(New().Find("Group").Match("Value", "==", "GroupA")).
+		MatchingRelationProperty("role", "==", "admin").
+		MatchingRelationProperty("status", "==", "inactive") // This one fails
+	result := Execute(testStorage, unlinkQry)
+	if result.Amount != 0 {
+		t.Errorf("Expected 0 relations to be unlinked, got %d", result.Amount)
+	}
+	t.Cleanup(func() { Cleanup() })
+}
+
+// --- End of Test Suite for Enhanced Link/Unlink ---
+
+// --- Test Suite for Update Query with Required Joins ---
+
+// Helper function to create test data for update-join scenarios
+func createTestDataForUpdateJoins() {
+	// Entity Types
+	// Main entities to be updated: "UpdateTarget"
+	// Related entities: "RequiredChild", "RequiredParent", "OptionalChild"
+	typeIDUpdateTarget, _ := testStorage.CreateEntityType("UpdateTarget")
+	typeIDRequiredChild, _ := testStorage.CreateEntityType("RequiredChild")
+	typeIDRequiredParent, _ := testStorage.CreateEntityType("RequiredParent")
+	typeIDOptionalChild, _ := testStorage.CreateEntityType("OptionalChild")
+
+	// --- Scenario 1: Target1 (should pass required To join) ---
+	// UpdateTarget1 -> RequiredChild1
+	ut1ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDUpdateTarget, Value: "UT1", Properties: map[string]string{"Status": "Initial"}})
+	rc1ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDRequiredChild, Value: "RC1"})
+	testStorage.CreateRelation(typeIDUpdateTarget, ut1ID, typeIDRequiredChild, rc1ID, types.StorageRelation{})
+
+	// --- Scenario 2: Target2 (should FAIL required To join) ---
+	// UpdateTarget2 (no child)
+	ut2ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDUpdateTarget, Value: "UT2", Properties: map[string]string{"Status": "Initial"}})
+	_ = ut2ID // use ut2ID if needed later, for now it's just created
+
+	// --- Scenario 3: Target3 (should pass required From join) ---
+	// RequiredParent1 -> UpdateTarget3
+	ut3ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDUpdateTarget, Value: "UT3", Properties: map[string]string{"Status": "Initial"}})
+	rp1ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDRequiredParent, Value: "RP1"})
+	testStorage.CreateRelation(typeIDRequiredParent, rp1ID, typeIDUpdateTarget, ut3ID, types.StorageRelation{})
+
+	// --- Scenario 4: Target4 (should pass multiple required joins and optional) ---
+	// RequiredParent2 -> UpdateTarget4 -> RequiredChild2
+	// UpdateTarget4 -> OptionalChild1 (optional)
+	ut4ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDUpdateTarget, Value: "UT4", Properties: map[string]string{"Status": "Initial"}})
+	rp2ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDRequiredParent, Value: "RP2"})
+	rc2ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDRequiredChild, Value: "RC2"})
+	oc1ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDOptionalChild, Value: "OC1"})
+	testStorage.CreateRelation(typeIDRequiredParent, rp2ID, typeIDUpdateTarget, ut4ID, types.StorageRelation{}) // RP2 -> UT4
+	testStorage.CreateRelation(typeIDUpdateTarget, ut4ID, typeIDRequiredChild, rc2ID, types.StorageRelation{})  // UT4 -> RC2
+	testStorage.CreateRelation(typeIDUpdateTarget, ut4ID, typeIDOptionalChild, oc1ID, types.StorageRelation{})  // UT4 -> OC1
+
+	// --- Scenario 5: Target5 (all matching initially, but one will fail a multi-join) ---
+	// UpdateTarget5 -> RequiredChild3
+	// RequiredParent3 -> UpdateTarget5 (This one is MISSING for UT6)
+	ut5ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDUpdateTarget, Value: "UT5", Properties: map[string]string{"Status": "Initial"}})
+	rc3ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDRequiredChild, Value: "RC3"})
+	rp3ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDRequiredParent, Value: "RP3"})
+	testStorage.CreateRelation(typeIDUpdateTarget, ut5ID, typeIDRequiredChild, rc3ID, types.StorageRelation{})  // UT5 -> RC3
+	testStorage.CreateRelation(typeIDRequiredParent, rp3ID, typeIDUpdateTarget, ut5ID, types.StorageRelation{}) // RP3 -> UT5
+
+	// UpdateTarget6 -> RequiredChild4 (This one is OK)
+	// RequiredParent4 -> UpdateTarget6 (This relation will be MISSING to cause failure for the batch)
+	ut6ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDUpdateTarget, Value: "UT6", Properties: map[string]string{"Status": "Initial"}})
+	rc4ID, _ := testStorage.CreateEntity(types.StorageEntity{Type: typeIDRequiredChild, Value: "RC4"})
+	testStorage.CreateRelation(typeIDUpdateTarget, ut6ID, typeIDRequiredChild, rc4ID, types.StorageRelation{}) // UT6 -> RC4
+	// Missing: RP -> UT6
+}
+
+func TestUpdateWithRequiredToJoin_Success(t *testing.T) {
+	initStorage()
+	createTestDataForUpdateJoins()
+
+	// UT1 has RequiredChild1. Update should proceed.
+	qry := New().Update("UpdateTarget").Match("Value", "==", "UT1").
+		To(New().Read("RequiredChild").Match("Value", "==", "RC1")).
+		Set("Properties.Status", "Updated")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected Amount to be 1, got %d", result.Amount)
+	}
+
+	// Verify UT1 was updated
+	readQry := New().Read("UpdateTarget").Match("Value", "==", "UT1")
+	readResult := Execute(testStorage, readQry)
+	if readResult.Amount != 1 || readResult.Entities[0].Properties["Status"] != "Updated" {
+		t.Errorf("UT1 was not updated as expected. Status: %s", readResult.Entities[0].Properties["Status"])
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUpdateWithRequiredToJoin_Fail(t *testing.T) {
+	initStorage()
+	createTestDataForUpdateJoins()
+
+	// UT1 has child, UT2 does not. Batch update should fail.
+	// Query matches UT1 and UT2 initially.
+	qry := New().Update("UpdateTarget").Match("Context", "==", ""). // Matches all UT initially if context is empty or not set
+									To(New().Read("RequiredChild")). // UT2 will fail this
+									Set("Properties.Status", "UpdatedBatchFail")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 0 {
+		t.Errorf("Expected Amount to be 0 because UT2 misses required join, got %d", result.Amount)
+	}
+
+	// Verify NEITHER UT1 nor UT2 was updated
+	readQryUT1 := New().Read("UpdateTarget").Match("Value", "==", "UT1")
+	readResultUT1 := Execute(testStorage, readQryUT1)
+	if readResultUT1.Entities[0].Properties["Status"] != "Initial" {
+		t.Errorf("UT1 should not have been updated. Status: %s", readResultUT1.Entities[0].Properties["Status"])
+	}
+
+	readQryUT2 := New().Read("UpdateTarget").Match("Value", "==", "UT2")
+	readResultUT2 := Execute(testStorage, readQryUT2)
+	if readResultUT2.Entities[0].Properties["Status"] != "Initial" {
+		t.Errorf("UT2 should not have been updated. Status: %s", readResultUT2.Entities[0].Properties["Status"])
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUpdateWithRequiredFromJoin_Success(t *testing.T) {
+	initStorage()
+	createTestDataForUpdateJoins()
+
+	// UT3 has RequiredParent1. Update should proceed.
+	qry := New().Update("UpdateTarget").Match("Value", "==", "UT3").
+		From(New().Read("RequiredParent").Match("Value", "==", "RP1")).
+		Set("Properties.Status", "Updated")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected Amount to be 1, got %d", result.Amount)
+	}
+
+	readQry := New().Read("UpdateTarget").Match("Value", "==", "UT3")
+	readResult := Execute(testStorage, readQry)
+	if readResult.Amount != 1 || readResult.Entities[0].Properties["Status"] != "Updated" {
+		t.Errorf("UT3 was not updated as expected. Status: %s", readResult.Entities[0].Properties["Status"])
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUpdateWithRequiredFromJoin_Fail(t *testing.T) {
+	initStorage()
+	createTestDataForUpdateJoins()
+
+	// UT2 has no parent. If query targets UT2 and requires a parent, it should fail.
+	// Let's make a query that targets UT2 and UT3. UT2 will fail.
+	qry := New().Update("UpdateTarget").Match("Value", "in", "UT2,UT3"). // Matches UT2 and UT3
+										From(New().Read("RequiredParent")). // UT2 will fail this
+										Set("Properties.Status", "UpdatedBatchFail")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 0 {
+		t.Errorf("Expected Amount to be 0 because UT2 misses required From join, got %d", result.Amount)
+	}
+
+	// Verify UT3 was NOT updated
+	readQryUT3 := New().Read("UpdateTarget").Match("Value", "==", "UT3")
+	readResultUT3 := Execute(testStorage, readQryUT3)
+	if readResultUT3.Entities[0].Properties["Status"] != "Initial" {
+		t.Errorf("UT3 should not have been updated. Status: %s", readResultUT3.Entities[0].Properties["Status"])
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUpdateWithMultipleRequiredJoins_Success(t *testing.T) {
+	initStorage()
+	createTestDataForUpdateJoins()
+
+	// UT4 has RP2 -> UT4 -> RC2. Update should proceed.
+	qry := New().Update("UpdateTarget").Match("Value", "==", "UT4").
+		From(New().Read("RequiredParent").Match("Value", "==", "RP2")).
+		To(New().Read("RequiredChild").Match("Value", "==", "RC2")).
+		Set("Properties.Status", "UpdatedMulti")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected Amount to be 1, got %d", result.Amount)
+	}
+
+	readQry := New().Read("UpdateTarget").Match("Value", "==", "UT4")
+	readResult := Execute(testStorage, readQry)
+	if readResult.Amount != 1 || readResult.Entities[0].Properties["Status"] != "UpdatedMulti" {
+		t.Errorf("UT4 was not updated as expected. Status: %s", readResult.Entities[0].Properties["Status"])
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUpdateWithMultipleRequiredJoins_Fail(t *testing.T) {
+	initStorage()
+	createTestDataForUpdateJoins()
+
+	// Query targets UT5 and UT6.
+	// UT5: RP3 -> UT5 -> RC3 (OK)
+	// UT6: (No Parent) -> UT6 -> RC4 (FAILS From join)
+	// Batch should fail.
+	qry := New().Update("UpdateTarget").Match("Value", "in", "UT5,UT6").
+		From(New().Read("RequiredParent")). // UT6 fails this
+		To(New().Read("RequiredChild")).    // Both UT5 and UT6 have a RequiredChild
+		Set("Properties.Status", "UpdatedMultiFail")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 0 {
+		t.Errorf("Expected Amount to be 0 because UT6 misses a required From join, got %d", result.Amount)
+	}
+
+	// Verify UT5 was NOT updated
+	readQryUT5 := New().Read("UpdateTarget").Match("Value", "==", "UT5")
+	readResultUT5 := Execute(testStorage, readQryUT5)
+	if readResultUT5.Entities[0].Properties["Status"] != "Initial" {
+		t.Errorf("UT5 should not have been updated. Status: %s", readResultUT5.Entities[0].Properties["Status"])
+	}
+	// Verify UT6 was NOT updated
+	readQryUT6 := New().Read("UpdateTarget").Match("Value", "==", "UT6")
+	readResultUT6 := Execute(testStorage, readQryUT6)
+	if readResultUT6.Entities[0].Properties["Status"] != "Initial" {
+		t.Errorf("UT6 should not have been updated. Status: %s", readResultUT6.Entities[0].Properties["Status"])
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUpdateWithOptionalCanToJoin_Proceeds(t *testing.T) {
+	initStorage()
+	createTestDataForUpdateJoins()
+
+	// UT1 has RequiredChild1. UT2 does not.
+	// Update UT1 and UT2. Optional CanTo join for OptionalChild.
+	// UT1 does not have OptionalChild. UT4 has OptionalChild1.
+	// The update should proceed for both UT1 and UT2 as CanTo is optional.
+	qry := New().Update("UpdateTarget").Match("Value", "in", "UT1,UT2").
+		CanTo(New().Read("OptionalChild")). // This join is optional
+		Set("Properties.Status", "UpdatedWithOptional")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 2 { // Both UT1 and UT2 should be "updated" (attempted)
+		t.Errorf("Expected Amount to be 2, got %d", result.Amount)
+	}
+
+	// Verify UT1 was updated
+	readQryUT1 := New().Read("UpdateTarget").Match("Value", "==", "UT1")
+	readResultUT1 := Execute(testStorage, readQryUT1)
+	if readResultUT1.Amount != 1 || readResultUT1.Entities[0].Properties["Status"] != "UpdatedWithOptional" {
+		t.Errorf("UT1 was not updated as expected. Status: %s", readResultUT1.Entities[0].Properties["Status"])
+	}
+	// Verify UT2 was updated
+	readQryUT2 := New().Read("UpdateTarget").Match("Value", "==", "UT2")
+	readResultUT2 := Execute(testStorage, readQryUT2)
+	if readResultUT2.Amount != 1 || readResultUT2.Entities[0].Properties["Status"] != "UpdatedWithOptional" {
+		t.Errorf("UT2 was not updated as expected. Status: %s", readResultUT2.Entities[0].Properties["Status"])
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+func TestUpdateWithNoJoins_Success(t *testing.T) {
+	initStorage()
+	createTestDataForUpdateJoins()
+
+	// Update UT1, no joins specified. Should proceed.
+	qry := New().Update("UpdateTarget").Match("Value", "==", "UT1").
+		Set("Properties.Status", "UpdatedNoJoins")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected Amount to be 1, got %d", result.Amount)
+	}
+
+	readQry := New().Read("UpdateTarget").Match("Value", "==", "UT1")
+	readResult := Execute(testStorage, readQry)
+	if readResult.Amount != 1 || readResult.Entities[0].Properties["Status"] != "UpdatedNoJoins" {
+		t.Errorf("UT1 was not updated as expected. Status: %s", readResult.Entities[0].Properties["Status"])
+	}
+
+	t.Cleanup(func() { Cleanup() })
+}
+
+// --- End of Test Suite for Update Query with Required Joins ---
 
 func TestFilterValueBySmallerThanMatch(t *testing.T) {
 	initStorage()
@@ -1154,4 +1658,206 @@ func Cleanup() {
 	testStorage.EntityTypeIDMax = 0
 	testStorage.RelationStorage = make(map[int]map[int]map[int]map[int]types.StorageRelation)
 	testStorage.RelationRStorage = make(map[int]map[int]map[int]map[int]bool)
+}
+
+// Test data for complex filter tests
+func createTestDataForComplexFilters() {
+	typeIDcomplex, _ := testStorage.CreateEntityType("Complex")
+	testStorage.CreateEntity(types.StorageEntity{
+		Type:       typeIDcomplex,
+		Value:      "ValA",
+		Context:    "Ctx1",
+		Properties: map[string]string{"Status": "Active", "Count": "10"},
+	})
+	testStorage.CreateEntity(types.StorageEntity{
+		Type:       typeIDcomplex,
+		Value:      "ValB",
+		Context:    "Ctx1",
+		Properties: map[string]string{"Status": "Active", "Count": "20"},
+	})
+	testStorage.CreateEntity(types.StorageEntity{
+		Type:       typeIDcomplex,
+		Value:      "ValC",
+		Context:    "Ctx2",
+		Properties: map[string]string{"Status": "Inactive", "Count": "30"},
+	})
+	testStorage.CreateEntity(types.StorageEntity{
+		Type:       typeIDcomplex,
+		Value:      "ValD",
+		Context:    "Ctx2",
+		Properties: map[string]string{"Status": "Active", "Count": "5"},
+	})
+	testStorage.CreateEntity(types.StorageEntity{ // For NOT tests
+		Type:       typeIDcomplex,
+		Value:      "ValE_NotThis",
+		Context:    "Ctx_Not",
+		Properties: map[string]string{"Status": "Pending", "Count": "100"},
+	})
+}
+
+func TestComplexFilter_SimpleAnd(t *testing.T) {
+	initStorage()
+	createTestDataForComplexFilters()
+	qry := New().Read("Complex").Filter(
+		cond.And(
+			cond.Match("Context", "==", "Ctx1"),
+			cond.Match("Properties.Status", "==", "Active"),
+		),
+	)
+	result := Execute(testStorage, qry)
+	if 2 != result.Amount {
+		t.Errorf("Expected 2 entities, got %d. Results: %+v", result.Amount, result.Entities)
+	}
+	// Further checks for specific values if needed
+	foundValA := false
+	foundValB := false
+	for _, e := range result.Entities {
+		if e.Value == "ValA" {
+			foundValA = true
+		}
+		if e.Value == "ValB" {
+			foundValB = true
+		}
+	}
+	if !foundValA || !foundValB {
+		t.Errorf("Expected ValA and ValB, got: %+v", result.Entities)
+	}
+
+	t.Cleanup(func() {
+		Cleanup()
+	})
+}
+
+func TestComplexFilter_SimpleOr(t *testing.T) {
+	initStorage()
+	createTestDataForComplexFilters()
+	qry := New().Read("Complex").Filter(
+		cond.Or(
+			cond.Match("Value", "==", "ValC"),
+			cond.Match("Properties.Count", "==", "5"),
+		),
+	)
+	result := Execute(testStorage, qry)
+	if 2 != result.Amount {
+		t.Errorf("Expected 2 entities, got %d. Results: %+v", result.Amount, result.Entities)
+	}
+	foundValC := false
+	foundValD := false
+	for _, e := range result.Entities {
+		if e.Value == "ValC" {
+			foundValC = true
+		}
+		if e.Value == "ValD" {
+			foundValD = true
+		}
+	}
+	if !foundValC || !foundValD {
+		t.Errorf("Expected ValC and ValD, got: %+v", result.Entities)
+	}
+	t.Cleanup(func() {
+		Cleanup()
+	})
+}
+
+func TestComplexFilter_NestedAndOr(t *testing.T) {
+	initStorage()
+	createTestDataForComplexFilters()
+	// (Context == "Ctx1" AND Properties.Status == "Active") OR Value == "ValD"
+	// Should return ValA, ValB, ValD
+	qry := New().Read("Complex").Filter(
+		cond.Or(
+			cond.And(
+				cond.Match("Context", "==", "Ctx1"),
+				cond.Match("Properties.Status", "==", "Active"),
+			),
+			cond.Match("Value", "==", "ValD"),
+		),
+	)
+	result := Execute(testStorage, qry)
+	if 3 != result.Amount {
+		t.Errorf("Expected 3 entities, got %d. Results: %+v", result.Amount, result.Entities)
+	}
+	t.Cleanup(func() {
+		Cleanup()
+	})
+}
+
+func TestComplexFilter_NegatedMatch(t *testing.T) {
+	initStorage()
+	createTestDataForComplexFilters()
+	// Context == "Ctx2" AND Properties.Status != "Inactive"
+	// Should return ValD
+	qry := New().Read("Complex").Filter(
+		cond.And(
+			cond.Match("Context", "==", "Ctx2"),
+			cond.Match("Properties.Status", "==", "Inactive").SetNegated(true),
+		),
+	)
+	result := Execute(testStorage, qry)
+	if 1 != result.Amount {
+		t.Errorf("Expected 1 entity, got %d. Results: %+v", result.Amount, result.Entities)
+	}
+	if result.Entities[0].Value != "ValD" {
+		t.Errorf("Expected ValD, got: %+v", result.Entities[0])
+	}
+	t.Cleanup(func() {
+		Cleanup()
+	})
+}
+
+func TestComplexFilter_NegatedGroup(t *testing.T) {
+	initStorage()
+	createTestDataForComplexFilters()
+	// NOT (Context == "Ctx1" OR Properties.Status == "Inactive")
+	// This means Context != "Ctx1" AND Properties.Status != "Inactive"
+	// (Context == Ctx2 AND Status == Active) -> ValD
+	// (Context == Ctx_Not AND Status == Pending) -> ValE_NotThis
+	// Should return ValD and ValE_NotThis
+	qry := New().Read("Complex").Filter(
+		cond.Or(
+			cond.Match("Context", "==", "Ctx1"),
+			cond.Match("Properties.Status", "==", "Inactive"),
+		).SetNegated(true),
+	)
+	result := Execute(testStorage, qry)
+	if 2 != result.Amount {
+		t.Errorf("Expected 2 entities, got %d. Results: %+v", result.Amount, result.Entities)
+	}
+	foundValD := false
+	foundValE := false
+	for _, e := range result.Entities {
+		if e.Value == "ValD" {
+			foundValD = true
+		}
+		if e.Value == "ValE_NotThis" {
+			foundValE = true
+		}
+	}
+	if !foundValD || !foundValE {
+		t.Errorf("Expected ValD and ValE_NotThis, got: %+v", result.Entities)
+	}
+
+	t.Cleanup(func() {
+		Cleanup()
+	})
+}
+
+func TestComplexFilter_CoexistenceWithLegacyMatch_FilterTakesPrecedence(t *testing.T) {
+	initStorage()
+	createTestDataForComplexFilters()
+	// Legacy Match would find ValA. Filter should find ValC.
+	qry := New().Read("Complex").
+		Match("Value", "==", "ValA"). // This should be ignored
+		Filter(cond.Match("Value", "==", "ValC"))
+
+	result := Execute(testStorage, qry)
+	if 1 != result.Amount {
+		t.Errorf("Expected 1 entity from Filter, got %d. Results: %+v", result.Amount, result.Entities)
+	}
+	if result.Entities[0].Value != "ValC" {
+		t.Errorf("Expected ValC from Filter, got: %s", result.Entities[0].Value)
+	}
+	t.Cleanup(func() {
+		Cleanup()
+	})
 }

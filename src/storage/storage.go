@@ -3,12 +3,15 @@ package storage
 // handle all the imports
 import (
 	"errors"
-	"github.com/voodooEntity/gits/src/transport"
-	"github.com/voodooEntity/gits/src/types"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+
+	// Added import for cond package
+	"github.com/voodooEntity/gits/src/query/cond"
+	"github.com/voodooEntity/gits/src/transport"
+	"github.com/voodooEntity/gits/src/types"
 )
 
 var persistenceFlag = false
@@ -1930,11 +1933,12 @@ func (s *Storage) mapRecursive(entity transport.TransportEntity, relatedType int
 
 func (s *Storage) GetEntitiesByQueryFilter(
 	typePool []string,
-	conditions [][][3]string,
-	idFilter [][]int,
-	valueFilter [][]int,
-	contextFilter [][]int,
-	propertyList []map[string][]int,
+	rootFilter cond.Condition, // New parameter
+	conditions [][][3]string, // Legacy conditions (used if rootFilter is nil)
+	idFilter [][]int, // Legacy (used if rootFilter is nil)
+	valueFilter [][]int, // Legacy (used if rootFilter is nil)
+	contextFilter [][]int, // Legacy (used if rootFilter is nil)
+	propertyList []map[string][]int, // Legacy (used if rootFilter is nil)
 	returnDataFlag bool,
 ) (
 	[]transport.TransportEntity,
@@ -1965,50 +1969,59 @@ func (s *Storage) GetEntitiesByQueryFilter(
 		// lets walk through this pools entities
 		for entityID, entity := range s.EntityStorage[typeID] {
 			add := false
-			// if there are matchgroups
-			if 0 < len(conditions) {
-				for conditionGroupKey, conditionGroup := range conditions {
-					// first we check if there is an ID filter
-					// ### could have a special case for == on
-					// id since this can be resolved very fast
-					if 0 < len(idFilter[conditionGroupKey]) && !s.matchGroup(idFilter[conditionGroupKey], conditionGroup, strconv.Itoa(entityID)) {
-						continue
-					}
-					// now we value
-					if 0 < len(valueFilter[conditionGroupKey]) && !s.matchGroup(valueFilter[conditionGroupKey], conditionGroup, entity.Value) {
-						continue
-					}
-					// than context
-					if 0 < len(contextFilter[conditionGroupKey]) && !s.matchGroup(contextFilter[conditionGroupKey], conditionGroup, entity.Context) {
-						continue
-					}
-					// and now the properties
-					contGroupLoop := false
-					for propertyKey, propertyConditions := range propertyList[conditionGroupKey] {
-						if _, ok := entity.Properties[propertyKey]; ok {
-							if !s.matchGroup(propertyConditions, conditionGroup, entity.Properties[propertyKey]) {
-								contGroupLoop = true // ### refactor this i dont like it a bit but dont see a better way right now
-								break
-							}
-						} else {
-							// property does not exist
-							contGroupLoop = true
-							break
-						}
-					}
-					// ### we broke out of the inner loop means we have to continue the condition loop
-					if contGroupLoop {
-						continue
-					}
-					// if we are still in here all the applied filters worked
+			if rootFilter != nil {
+				// New complex filter logic
+				if s.evaluateCondition(entity, rootFilter) {
 					add = true
-					// if we got here we can break out since the entity has been added
-					break
 				}
 			} else {
-				// we got no conditions so basicly just hit on every of this type
-				add = true
+				// Legacy filter logic
+				// if there are matchgroups
+				if 0 < len(conditions) { // conditions is the legacy [][][3]string
+					for conditionGroupKey, conditionGroup := range conditions {
+						// first we check if there is an ID filter
+						// ### could have a special case for == on
+						// id since this can be resolved very fast
+						if 0 < len(idFilter[conditionGroupKey]) && !s.matchGroup(idFilter[conditionGroupKey], conditionGroup, strconv.Itoa(entityID)) {
+							continue
+						}
+						// now we value
+						if 0 < len(valueFilter[conditionGroupKey]) && !s.matchGroup(valueFilter[conditionGroupKey], conditionGroup, entity.Value) {
+							continue
+						}
+						// than context
+						if 0 < len(contextFilter[conditionGroupKey]) && !s.matchGroup(contextFilter[conditionGroupKey], conditionGroup, entity.Context) {
+							continue
+						}
+						// and now the properties
+						contGroupLoop := false
+						for propertyKey, propertyConditions := range propertyList[conditionGroupKey] {
+							if _, ok := entity.Properties[propertyKey]; ok {
+								if !s.matchGroup(propertyConditions, conditionGroup, entity.Properties[propertyKey]) {
+									contGroupLoop = true // ### refactor this i dont like it a bit but dont see a better way right now
+									break
+								}
+							} else {
+								// property does not exist
+								contGroupLoop = true
+								break
+							}
+						}
+						// ### we broke out of the inner loop means we have to continue the condition loop
+						if contGroupLoop {
+							continue
+						}
+						// if we are still in here all the applied filters worked
+						add = true
+						// if we got here we can break out since the entity has been added
+						break
+					}
+				} else {
+					// we got no conditions so basicly just hit on every of this type
+					add = true
+				}
 			}
+
 			// do we need to add this dataset?
 			if true == add {
 				// and we can add the entity to our resultList
@@ -2039,11 +2052,12 @@ func (s *Storage) GetEntitiesByQueryFilter(
 
 func (s *Storage) GetEntitiesByQueryFilterAndSourceAddress(
 	typePool []string,
-	conditions [][][3]string,
-	idFilter [][]int,
-	valueFilter [][]int,
-	contextFilter [][]int,
-	propertyList []map[string][]int,
+	rootFilter cond.Condition, // New parameter
+	conditions [][][3]string, // Legacy conditions
+	idFilter [][]int, // Legacy
+	valueFilter [][]int, // Legacy
+	contextFilter [][]int, // Legacy
+	propertyList []map[string][]int, // Legacy
 	sourceAddress [2]int,
 	direction int,
 	returnDataFlag bool,
@@ -2087,49 +2101,58 @@ func (s *Storage) GetEntitiesByQueryFilterAndSourceAddress(
 		for _, targetID := range targetIDlist {
 			add := false
 			entity := s.EntityStorage[targetType][targetID]
-			if 0 < len(conditions) {
-				for conditionGroupKey, conditionGroup := range conditions {
-					// first we check if there is an ID filter
-					// ### could have a special case for == on
-					// id since this can be resolved very fast
-					if !s.matchGroup(idFilter[conditionGroupKey], conditionGroup, strconv.Itoa(targetID)) {
-						continue
-					}
-					// now we value
-					if !s.matchGroup(valueFilter[conditionGroupKey], conditionGroup, entity.Value) {
-						continue
-					}
-					// than context
-					if !s.matchGroup(contextFilter[conditionGroupKey], conditionGroup, entity.Context) {
-						continue
-					}
-					// and now the properties
-					contGroupLoop := false
-					for propertyKey, propertyConditions := range propertyList[conditionGroupKey] {
-						if _, ok := entity.Properties[propertyKey]; ok {
-							if !s.matchGroup(propertyConditions, conditionGroup, entity.Properties[propertyKey]) {
-								contGroupLoop = true // ### refactor this i dont like it a bit but dont see a better way right now
-								break
-							}
-						} else {
-							// property does not exist
-							contGroupLoop = true
-							break
-						}
-					}
-					// ### we broke out of the inner loop means we have to continue the condition loop
-					if contGroupLoop {
-						continue
-					}
-					// if we are still in here all the applied filters worked
-					// and we can add the entity to our resultList
+
+			if rootFilter != nil {
+				// New complex filter logic
+				if s.evaluateCondition(entity, rootFilter) {
 					add = true
-					// if we got here we can break out since the entity has been added
-					break
 				}
 			} else {
-				// we have no conditions so we add it anyway
-				add = true
+				// Legacy filter logic
+				if 0 < len(conditions) { // conditions is the legacy [][][3]string
+					for conditionGroupKey, conditionGroup := range conditions {
+						// first we check if there is an ID filter
+						// ### could have a special case for == on
+						// id since this can be resolved very fast
+						if !s.matchGroup(idFilter[conditionGroupKey], conditionGroup, strconv.Itoa(targetID)) {
+							continue
+						}
+						// now we value
+						if !s.matchGroup(valueFilter[conditionGroupKey], conditionGroup, entity.Value) {
+							continue
+						}
+						// than context
+						if !s.matchGroup(contextFilter[conditionGroupKey], conditionGroup, entity.Context) {
+							continue
+						}
+						// and now the properties
+						contGroupLoop := false
+						for propertyKey, propertyConditions := range propertyList[conditionGroupKey] {
+							if _, ok := entity.Properties[propertyKey]; ok {
+								if !s.matchGroup(propertyConditions, conditionGroup, entity.Properties[propertyKey]) {
+									contGroupLoop = true // ### refactor this i dont like it a bit but dont see a better way right now
+									break
+								}
+							} else {
+								// property does not exist
+								contGroupLoop = true
+								break
+							}
+						}
+						// ### we broke out of the inner loop means we have to continue the condition loop
+						if contGroupLoop {
+							continue
+						}
+						// if we are still in here all the applied filters worked
+						// and we can add the entity to our resultList
+						add = true
+						// if we got here we can break out since the entity has been added
+						break
+					}
+				} else {
+					// we have no conditions so we add it anyway
+					add = true
+				}
 			}
 
 			// if we add the data
@@ -2191,19 +2214,29 @@ func (s *Storage) BatchDeleteAddressList(addressList [][2]int) {
 	}
 }
 
-func (s *Storage) LinkAddressLists(from [][2]int, to [][2]int) int {
+func (s *Storage) LinkAddressLists(from [][2]int, to [][2]int, relCtx string, relProps map[string]string) int {
 	linkedAmount := 0
 	for _, singleFrom := range from {
 		for _, singleTo := range to {
-			// do we already have a relation between those too?`if not we create it
+			// do we already have a relation between those too? if not we create it
+			// If a relation already exists, we do not update its context or properties with this call.
+			// Link is for creating new relations.
 			if !s.RelationExistsUnsafe(singleFrom[0], singleFrom[1], singleTo[0], singleTo[1]) {
+				// Deep copy properties to avoid shared map issues if relProps is reused
+				propsCopy := make(map[string]string)
+				if relProps != nil {
+					for k, v := range relProps {
+						propsCopy[k] = v
+					}
+				}
 				s.CreateRelationUnsafe(singleFrom[0], singleFrom[1], singleTo[0], singleTo[1], types.StorageRelation{
 					SourceType: singleFrom[0],
 					SourceID:   singleFrom[1],
 					TargetType: singleTo[0],
 					TargetID:   singleTo[1],
+					Context:    relCtx,
+					Properties: propsCopy,
 				})
-				// archivist.Debug("Creating link from to ", singleFrom[0], singleFrom[1], singleTo[0], singleTo[1])
 				linkedAmount++
 			}
 		}
@@ -2326,14 +2359,15 @@ func (s *Storage) getRRelationTargetIDsBySourceAddressAndTargetType(sourceType i
 
 func (s *Storage) matchGroup(filterGroup []int, conditions [][3]string, test string) bool {
 	for _, filterGroupID := range filterGroup {
-		if !s.match(test, conditions[filterGroupID][1], conditions[filterGroupID][2]) {
+		if !s.Match(test, conditions[filterGroupID][1], conditions[filterGroupID][2]) {
 			return false
 		}
 	}
 	return true
 }
 
-func (s *Storage) match(alpha string, operator string, beta string) bool {
+// Match is an exported version of the internal match logic.
+func (s *Storage) Match(alpha string, operator string, beta string) bool {
 	switch operator {
 	case "==":
 		if alpha == beta {
@@ -2462,4 +2496,73 @@ func (s *Storage) deepCopyRelation(relation types.StorageRelation) types.Storage
 	}
 
 	return newRelation
+}
+
+// evaluateCondition recursively evaluates a complex condition tree against a given entity.
+func (s *Storage) evaluateCondition(entity types.StorageEntity, condition cond.Condition) bool {
+	if condition == nil {
+		return true // Or handle as an error/false depending on desired behavior for nil conditions
+	}
+
+	var result bool
+
+	switch c := condition.(type) {
+	case *cond.MatchCondition:
+		var fieldValue string
+		switch c.Field {
+		case "ID":
+			fieldValue = strconv.Itoa(entity.ID)
+		case "Value":
+			fieldValue = entity.Value
+		case "Context":
+			fieldValue = entity.Context
+		default:
+			if strings.HasPrefix(c.Field, "Properties.") {
+				propKey := strings.TrimPrefix(c.Field, "Properties.")
+				if val, ok := entity.Properties[propKey]; ok {
+					fieldValue = val
+				} else {
+					// Property does not exist on entity, so it cannot match
+					result = false
+					// Apply negation if MatchCondition itself is negated
+					if c.IsNegated() {
+						return !result
+					}
+					return result
+				}
+			} else {
+				// Unknown field
+				return false // Or handle error
+			}
+		}
+		result = s.Match(fieldValue, c.Operator, c.Value)
+
+	case *cond.ConditionGroup:
+		if c.Type == cond.OpAnd {
+			result = true // Assume true until an operand is false
+			for _, operand := range c.Operands {
+				if !s.evaluateCondition(entity, operand) {
+					result = false
+					break
+				}
+			}
+		} else if c.Type == cond.OpOr {
+			result = false // Assume false until an operand is true
+			for _, operand := range c.Operands {
+				if s.evaluateCondition(entity, operand) {
+					result = true
+					break
+				}
+			}
+		}
+	default:
+		// Unknown condition type
+		return false // Or handle error
+	}
+
+	// Apply negation if the condition itself (Match or Group) is negated
+	if condition.IsNegated() {
+		return !result
+	}
+	return result
 }

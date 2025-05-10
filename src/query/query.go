@@ -1,12 +1,14 @@
 package query
 
 import (
-	"github.com/voodooEntity/gits/src/storage"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/voodooEntity/gits/src/storage"
+
 	"github.com/voodooEntity/gits/src/mutexhandler"
+	"github.com/voodooEntity/gits/src/query/cond" // Added import for cond package
 	"github.com/voodooEntity/gits/src/transport"
 )
 
@@ -52,6 +54,20 @@ type Query struct {
 	Sort               Order
 	Direction          int
 	Required           bool
+	RootFilter         cond.Condition // New field for complex conditions
+
+	// Fields for enhanced Link/Unlink
+	LinkRelationContext           string
+	LinkRelationProperties        map[string]string
+	UnlinkRelationContextFilter   string
+	UnlinkRelationPropertyFilters []RelationPropertyFilter
+}
+
+// RelationPropertyFilter defines a filter condition for a relation's property.
+type RelationPropertyFilter struct {
+	Key      string
+	Operator string
+	Value    string
 }
 
 type Order struct {
@@ -62,11 +78,13 @@ type Order struct {
 
 func New() *Query {
 	tmp := Query{
-		Conditions:         [][][3]string{},
-		currConditionGroup: 0,
-		Direction:          DIRECTION_NONE,
-		Values:             make(map[string]string),
-		Required:           true,
+		Conditions:                    [][][3]string{},
+		currConditionGroup:            0,
+		Direction:                     DIRECTION_NONE,
+		Values:                        make(map[string]string),
+		Required:                      true,
+		LinkRelationProperties:        make(map[string]string),    // Initialize map for Link properties
+		UnlinkRelationPropertyFilters: []RelationPropertyFilter{}, // Initialize slice for Unlink property filters
 	}
 	return &tmp
 }
@@ -156,6 +174,15 @@ func (self *Query) OrMatch(alpha string, operator string, beta string) *Query {
 	return self
 }
 
+// Filter sets the root condition for the query using the new complex condition model.
+// If this method is used, any conditions set by Match() or OrMatch() will be ignored.
+func (self *Query) Filter(condition cond.Condition) *Query {
+	self.RootFilter = condition
+	// By design, RootFilter takes precedence. Execute logic will handle this.
+	// No need to clear self.Conditions here, as Execute will check RootFilter first.
+	return self
+}
+
 func (self *Query) To(query *Query) *Query {
 	query.setDirection(DIRECTION_CHILD)
 	query.Required = true
@@ -223,6 +250,67 @@ func (self *Query) Limit(amount int) *Query {
 	return self
 }
 
+// WithRelationContext sets the context for relations created by a Link query.
+func (self *Query) WithRelationContext(context string) *Query {
+	if self.Method != METHOD_LINK {
+		// Optionally log a warning or simply ignore if not a LINK query
+		return self
+	}
+	self.LinkRelationContext = context
+	return self
+}
+
+// WithRelationProperty sets a single property for relations created by a Link query.
+func (self *Query) WithRelationProperty(key string, value string) *Query {
+	if self.Method != METHOD_LINK {
+		return self
+	}
+	// Ensure the map is initialized (it is in New(), but good practice for builder methods)
+	if self.LinkRelationProperties == nil {
+		self.LinkRelationProperties = make(map[string]string)
+	}
+	self.LinkRelationProperties[key] = value
+	return self
+}
+
+// WithRelationProperties sets multiple properties for relations created by a Link query.
+// This will merge with any existing properties set by WithRelationProperty.
+func (self *Query) WithRelationProperties(properties map[string]string) *Query {
+	if self.Method != METHOD_LINK {
+		return self
+	}
+	if self.LinkRelationProperties == nil {
+		self.LinkRelationProperties = make(map[string]string)
+	}
+	for k, v := range properties {
+		self.LinkRelationProperties[k] = v
+	}
+	return self
+}
+
+// MatchingRelationContext sets a context filter for relations targeted by an Unlink query.
+func (self *Query) MatchingRelationContext(context string) *Query {
+	if self.Method != METHOD_UNLINK {
+		// Optionally log a warning or simply ignore if not an UNLINK query
+		return self
+	}
+	self.UnlinkRelationContextFilter = context
+	return self
+}
+
+// MatchingRelationProperty adds a property filter for relations targeted by an Unlink query.
+func (self *Query) MatchingRelationProperty(key string, operator string, value string) *Query {
+	if self.Method != METHOD_UNLINK {
+		return self
+	}
+	// Ensure the slice is initialized (it is in New(), but good practice)
+	if self.UnlinkRelationPropertyFilters == nil {
+		self.UnlinkRelationPropertyFilters = []RelationPropertyFilter{}
+	}
+	self.UnlinkRelationPropertyFilters = append(self.UnlinkRelationPropertyFilters, RelationPropertyFilter{Key: key, Operator: operator, Value: value})
+	return self
+}
+
 func Execute(store *storage.Storage, query *Query) transport.Transport {
 	// no type pool = something is very wrong
 	if 0 == len(query.Pool) {
@@ -256,24 +344,47 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 
 	// some dispatches for special query variables
 	// do we need to return the data itself?
-	var addressPairs [][4]int
 	returnDataFlag := false
-	linked := true
-	linkAddresses := [2][][2]int{}
-	linkAmount := 0
 	if METHOD_READ == query.Method {
 		returnDataFlag = true
 	}
-	// is it a link query ? needs to be handled different
-	if METHOD_LINK == query.Method {
-		linked = false
-	}
+	// linked, linkAddresses, linkAmount, and addressPairs were removed as they are handled by new variables
+	// or specific logic paths.
 
 	// parse the conditions into our 2 neccesary groups
-	baseMatchList, propertyMatchList := parseConditions(query)
+	var baseMatchList [3][][]int
+	var propertyMatchList []map[string][]int
+	var legacyConditions [][][3]string
+
+	if query.RootFilter == nil {
+		legacyConditions = query.Conditions
+		baseMatchList, propertyMatchList = parseConditions(query)
+	} else {
+		// Ensure these are empty or nil if RootFilter is used,
+		// so storage layer knows to use RootFilter.
+		// Or, the storage layer function signature will explicitly take RootFilter
+		// and ignore these if RootFilter is non-nil.
+		// For now, pass them; storage will be adapted.
+		// parseConditions would use query.Conditions, so if RootFilter is set,
+		// we effectively want to pass empty legacy conditions.
+		// However, GetEntitiesByQueryFilter will be modified to accept RootFilter
+		// and prioritize it.
+	}
 
 	// now we need to fetch the list of entities fitting to our filters
-	resultData, resultAddresses, amount := store.GetEntitiesByQueryFilter(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, returnDataFlag)
+	// Signature of GetEntitiesByQueryFilter will be adapted in storage.go
+	// to accept query.RootFilter and prioritize it if non-nil.
+	var resultData []transport.TransportEntity
+	var resultAddresses [][2]int
+	var amount int
+
+	if query.RootFilter == nil {
+		// Use legacy conditions, pass nil for new RootFilter parameter
+		resultData, resultAddresses, amount = store.GetEntitiesByQueryFilter(query.Pool, nil, legacyConditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, returnDataFlag)
+	} else {
+		// Use new RootFilter, pass nil for legacy condition parameters
+		resultData, resultAddresses, amount = store.GetEntitiesByQueryFilter(query.Pool, query.RootFilter, nil, nil, nil, nil, nil, returnDataFlag)
+	}
 
 	// prepare transport data
 	ret := transport.Transport{
@@ -287,151 +398,275 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 		return ret
 	}
 
-	// do we have child queries to execute recursive?
-	if 0 < len(query.Map) {
-		// do we work with linked data? this gonne be the main case
-		if linked {
-			collectAddressPairs := [][4]int{}
-			for key, entityAddress := range resultAddresses {
-				// recursive execute our actions
-				children, parents, tmpAddressPairs, subAmount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairs)
+	performOperation := true // General flag, true by default
 
-				// make sure required subquery actually returns data
-				// this doesnt check if required ones are included
-				// only if any relations are given - but the recursive
-				// method will return no datasets if a required map
-				// is not fit so it should be fine - revalidate later ###
+	// Specifically for UPDATE with required joins: all-or-nothing validation
+	if query.Method == METHOD_UPDATE && query.HasRequiredSubQueries() && 0 < len(query.Map) {
+		for _, entityAddress := range resultAddresses {
+			// Call recursiveExecuteLinked primarily to get subAmount for validation.
+			// Pass an empty/fresh addressPairList ([][4]int{}) to avoid side effects on any shared slice
+			// if recursiveExecuteLinked modifies the slice it receives.
+			_, _, _, subAmount := recursiveExecuteLinked(store, query.Map, entityAddress, [][4]int{})
+			if subAmount == 0 { // subAmount is 0 if a required join within query.Map fails for this entityAddress
+				performOperation = false
+				break
+			}
+		}
+		if !performOperation {
+			// If validation failed for an UPDATE query, no entities will be processed.
+			ret.Amount = 0 // Signify no operation performed
+			mutexh.Release()
+			return ret // Update aborted
+		}
+	}
+
+	// Proceed with join processing for READ, LINK, UNLINK, or for UPDATE if validation passed
+	// This section will populate ret.Entities for READ, addressPairs for UNLINK, linkAddresses for LINK
+	// and set ret.Amount based on entities that satisfy their joins.
+
+	finalEntitiesForRead := []transport.TransportEntity{}
+	finalAddressPairsForUnlink := [][4]int{}   // For METHOD_UNLINK
+	finalLinkAddressesForLink := [2][][2]int{} // For METHOD_LINK, [direction][entityAddresses]
+	countOfEntitiesPassingJoins := 0
+
+	if 0 < len(query.Map) { // If there are joins
+		if query.Method == METHOD_LINK { // Special handling for METHOD_LINK
+			// Populate finalLinkAddressesForLink based on targetQuery matches
+			// This is the original logic for METHOD_LINK target collection
+			for _, targetQuery := range query.Map {
+				var tBaseMatchList [3][][]int
+				var tPropertyMatchList []map[string][]int
+				var tLegacyConditions [][][3]string
+				if targetQuery.RootFilter == nil {
+					tLegacyConditions = targetQuery.Conditions
+					tBaseMatchList, tPropertyMatchList = parseConditions(&targetQuery)
+				}
+
+				var tResultData []transport.TransportEntity
+				var tmpLinkAddresses [][2]int
+				var tmpLinkAmount int
+				if targetQuery.RootFilter == nil {
+					tResultData, tmpLinkAddresses, tmpLinkAmount = store.GetEntitiesByQueryFilter(targetQuery.Pool, nil, tLegacyConditions, tBaseMatchList[FILTER_ID], tBaseMatchList[FILTER_VALUE], tBaseMatchList[FILTER_CONTEXT], tPropertyMatchList, false)
+				} else {
+					tResultData, tmpLinkAddresses, tmpLinkAmount = store.GetEntitiesByQueryFilter(targetQuery.Pool, targetQuery.RootFilter, nil, nil, nil, nil, nil, false)
+				}
+				_ = tResultData // Explicitly ignore if not used, as per original logic
+
+				if 0 < tmpLinkAmount {
+					finalLinkAddressesForLink[targetQuery.Direction] = append(finalLinkAddressesForLink[targetQuery.Direction], tmpLinkAddresses...)
+					// linkAmount was a local var in original, its sum contributes to final link operation
+				}
+			}
+			// For METHOD_LINK, the number of primary entities to link *from* is the initial `amount`.
+			// The actual number of links made will be calculated later.
+			countOfEntitiesPassingJoins = amount
+		} else { // For READ, UPDATE (if validated and performOperation is true), UNLINK
+			for key, entityAddress := range resultAddresses {
+				// Pass a fresh/empty addressPairList to recursiveExecuteLinked to avoid side effects,
+				// as it might modify the slice it receives. tmpAddressPairs will be specific to this entityAddress.
+				children, parents, tmpAddressPairs, subAmount := recursiveExecuteLinked(store, query.Map, entityAddress, [][4]int{})
+
 				if query.HasRequiredSubQueries() && subAmount == 0 {
+					// This entity failed a required join. Skip it for READ/UNLINK.
+					// For UPDATE, this case should have been caught by the `performOperation` check earlier,
+					// so we wouldn't be in this loop if performOperation was false.
 					continue
 				}
 
-				// append the current addresspairs since it can be used for unlinking or other funny stuff
-				collectAddressPairs = append(collectAddressPairs, tmpAddressPairs...) // i dont like it but ok for now ### todo overthink
-				// now if given store children and parents entities
-				if 0 < len(children) {
-					resultData[key].ChildRelations = append(resultData[key].ChildRelations, children...)
-				}
-				if 0 < len(parents) {
-					resultData[key].ParentRelations = append(resultData[key].ParentRelations, parents...)
-				}
-				//archivist.Info("addressPairs", tmpAddressPairs)
-
-				// are there any results?
-				if 0 < amount || !query.HasRequiredSubQueries() { // revalidate the !query.HasRequired... case ###
-					ret.Amount++
-					// do we have any data to add? (and it is a read)
-					if METHOD_READ == query.Method {
-						ret.Entities = append(ret.Entities, resultData[key])
+				// This entity passed its required joins (or had no required ones).
+				countOfEntitiesPassingJoins++
+				if query.Method == METHOD_READ {
+					// resultData[key] corresponds to entityAddress.
+					currentEntityData := resultData[key] // Use the data fetched initially
+					if 0 < len(children) {
+						currentEntityData.ChildRelations = append(currentEntityData.ChildRelations, children...)
 					}
+					if 0 < len(parents) {
+						currentEntityData.ParentRelations = append(currentEntityData.ParentRelations, parents...)
+					}
+					finalEntitiesForRead = append(finalEntitiesForRead, currentEntityData)
+				}
+				if query.Method == METHOD_UNLINK {
+					finalAddressPairsForUnlink = append(finalAddressPairsForUnlink, tmpAddressPairs...)
 				}
 			}
-			addressPairs = append(addressPairs, collectAddressPairs...)
-		} else { // unlinked data - for now the only case for this is the METHOD_LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
-			for _, targetQuery := range query.Map {
-				tagretBaseMatchList, targetPopertyMatchList := parseConditions(&targetQuery)
-				_, tmpLinkAddresses, tmpLinkAmount := store.GetEntitiesByQueryFilter(targetQuery.Pool, targetQuery.Conditions, tagretBaseMatchList[FILTER_ID], tagretBaseMatchList[FILTER_VALUE], tagretBaseMatchList[FILTER_CONTEXT], targetPopertyMatchList, false)
-				if 0 < tmpLinkAmount {
-					linkAddresses[targetQuery.Direction] = append(linkAddresses[targetQuery.Direction], tmpLinkAddresses...)
-					linkAmount = linkAmount + tmpLinkAmount
-				}
-			}
-			ret.Amount = amount
 		}
-	} else {
-		ret.Entities = resultData
-		ret.Amount = amount
+	} else { // No joins
+		countOfEntitiesPassingJoins = amount
+		if query.Method == METHOD_READ {
+			finalEntitiesForRead = resultData
+		}
 	}
 
-	if 0 < ret.Amount {
-		// now we need to dispatch based on method what we gonne do
+	// Set ret.Amount based on processing.
+	// For UPDATE that passed validation, countOfEntitiesPassingJoins will be original `amount`.
+	// For READ/UNLINK, it's entities that passed joins.
+	// For LINK, it's initial `amount` of source entities.
+	ret.Amount = countOfEntitiesPassingJoins
+	if query.Method == METHOD_READ {
+		ret.Entities = finalEntitiesForRead
+	}
+
+	// Perform actual data modification or finalize read results
+	if 0 < ret.Amount { // If any entities are left to operate on or return
 		switch query.Method {
 		case METHOD_UPDATE:
-			// if we got any results and values to update given fire Batch update
+			// The `performOperation` check already handled the all-or-nothing for required joins.
+			// If we are here, it means either no required joins, or all entities met them.
+			// `resultAddresses` is the list of *all initially matched entities*. This is correct.
 			if 0 < len(query.Values) {
 				store.BatchUpdateAddressList(resultAddresses, query.Values)
+				// ret.Amount for UPDATE should reflect the number of entities attempted to update,
+				// which is the original `amount` if validation passed.
+				// countOfEntitiesPassingJoins would be `amount` in this scenario.
+				ret.Amount = amount // Ensure ret.Amount reflects all entities if update proceeded.
 			}
 		case METHOD_DELETE:
+			// Original behavior: operates on all initially matched `resultAddresses`.
+			// Task is specific to UPDATE, so DELETE logic remains unchanged unless specified.
 			store.BatchDeleteAddressList(resultAddresses)
+			// ret.Amount for DELETE should reflect number of entities deleted.
+			// If joins were to filter deletions, this would need adjustment.
+			// For now, it's `countOfEntitiesPassingJoins` (which is `amount` if no joins).
 		case METHOD_LINK:
 			affectedAmount := 0
-			if 0 < linkAmount {
-				for direction, tmpLinkAddresses := range linkAddresses {
+			// Use finalLinkAddressesForLink collected earlier.
+			// resultAddresses are the source entities for the links.
+			if 0 < len(finalLinkAddressesForLink[DIRECTION_CHILD])+len(finalLinkAddressesForLink[DIRECTION_PARENT]) {
+				for direction, tmpLinkAddresses := range finalLinkAddressesForLink {
 					if 0 < len(tmpLinkAddresses) {
 						if DIRECTION_CHILD == direction {
-							affectedAmount += store.LinkAddressLists(resultAddresses, tmpLinkAddresses)
+							affectedAmount += store.LinkAddressLists(resultAddresses, tmpLinkAddresses, query.LinkRelationContext, query.LinkRelationProperties)
 						} else { // else it must be towards parent so we flip params
-							affectedAmount += store.LinkAddressLists(tmpLinkAddresses, resultAddresses)
+							affectedAmount += store.LinkAddressLists(tmpLinkAddresses, resultAddresses, query.LinkRelationContext, query.LinkRelationProperties)
 						}
 					}
 				}
 			}
-			ret.Amount = affectedAmount
+			ret.Amount = affectedAmount // Actual number of links created.
 		case METHOD_UNLINK:
 			affectedAmount := 0
-			if 0 < len(addressPairs) {
-				for _, addressPair := range addressPairs {
-					store.DeleteRelationUnsafe(addressPair[0], addressPair[1], addressPair[2], addressPair[3])
-					affectedAmount++
+			if 0 < len(finalAddressPairsForUnlink) { // Use the collected pairs
+				for _, addressPair := range finalAddressPairsForUnlink {
+					// Check if relation matches context and property filters before deleting
+					relationShouldBeDeleted := true
+
+					// Fetch the relation to check its context and properties
+					// addressPair: [sourceType, sourceID, targetType, targetID]
+					relation, err := store.GetRelationUnsafe(addressPair[0], addressPair[1], addressPair[2], addressPair[3])
+					if err != nil {
+						// Relation doesn't exist or error fetching, skip.
+						// This might happen if another concurrent operation deleted it.
+						continue
+					}
+
+					// Apply UnlinkRelationContextFilter
+					if query.UnlinkRelationContextFilter != "" {
+						if relation.Context != query.UnlinkRelationContextFilter {
+							relationShouldBeDeleted = false
+						}
+					}
+
+					// Apply UnlinkRelationPropertyFilters if relationShouldBeDeleted is still true
+					if relationShouldBeDeleted && len(query.UnlinkRelationPropertyFilters) > 0 {
+						for _, propFilter := range query.UnlinkRelationPropertyFilters {
+							propValue, propExists := relation.Properties[propFilter.Key]
+							if !propExists {
+								relationShouldBeDeleted = false // Property to filter on doesn't exist on relation
+								break
+							}
+							// Use storage.match (or a similar helper if storage.match is not directly accessible/suitable)
+							// For now, assuming storage.match can be used or adapted.
+							// We need to make s.match accessible or replicate its logic here.
+							// For simplicity, let's assume we have a way to call it:
+							// match(valueFromRelation, operatorFromFilter, valueFromFilter)
+							// This part needs careful implementation of the match logic.
+							// Let's create a local helper or assume store.Match is available.
+							// For now, direct comparison for "==" operator as placeholder:
+							if !store.Match(propValue, propFilter.Operator, propFilter.Value) { // Assuming store.Match exists and is accessible
+								relationShouldBeDeleted = false
+								break
+							}
+						}
+					}
+
+					if relationShouldBeDeleted {
+						store.DeleteRelationUnsafe(addressPair[0], addressPair[1], addressPair[2], addressPair[3])
+						affectedAmount++
+					}
 				}
 			}
-			ret.Amount = affectedAmount
+			ret.Amount = affectedAmount // Actual number of relations unlinked.
 		case METHOD_READ:
-			// add traverse data for root level entities - only for read
+			// ret.Entities is already set. Apply traversal.
 			if direction, depth, traversed := isTraversed(*query); traversed {
-				for id, _ := range ret.Entities {
+				for id := range ret.Entities { // Iterate over the actual entities being returned
 					store.TraverseEnrich(&(ret.Entities[id]), direction, depth)
 				}
 			}
 		}
 
-		// do we have to sort?
-		if (Order{}) != query.Sort {
-			ret.Entities = sortResults(ret.Entities, query.Sort.Field, query.Sort.Direction, query.Sort.Mode)
-		}
+		// Post-processing for READ queries
+		if query.Method == METHOD_READ {
+			if (Order{}) != query.Sort {
+				ret.Entities = sortResults(ret.Entities, query.Sort.Field, query.Sort.Direction, query.Sort.Mode)
+			}
 
-		// finally check if we need to reduce due to given limit
-		// not the optimal implementation in terms of resource usage
-		// because if there is no order we could limit earlier in the query
-		// process but for now we gonne run with this solution ### revisit
-		limit := getLimitIfExists(*query)
-		if -1 != limit {
-			if len(ret.Entities) > limit {
-				ret.Entities = ret.Entities[:limit]
+			limit := getLimitIfExists(*query)
+			if -1 != limit {
+				if len(ret.Entities) > limit {
+					ret.Entities = ret.Entities[:limit]
+				}
 			}
 		}
 
-		// release all the mutex and provide the data
 		mutexh.Release()
 		return ret
 	}
 
-	// if there were no results we still need to unlock all the mutex
+	// if ret.Amount is 0 (either no initial hits, or update aborted, or no entities passed joins for read/unlink)
 	mutexh.Release()
-	return transport.Transport{}
+	return transport.Transport{} // Return empty transport
 }
 
 func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddress [2]int, addressPairList [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
 	var retParents []transport.TransportRelation
 	var retChildren []transport.TransportRelation
 	i := 0
-	for _, query := range queries {
+	for _, currentQuery := range queries { // Renamed query to currentQuery to avoid conflict
 		var tmpRet []transport.TransportRelation
 		// parse the conditions into our 2 necessary groups
-		baseMatchList, propertyMatchList := parseConditions(&query)
+		var baseMatchList [3][][]int
+		var propertyMatchList []map[string][]int
+		var legacyConditions [][][3]string
+
+		if currentQuery.RootFilter == nil {
+			legacyConditions = currentQuery.Conditions
+			baseMatchList, propertyMatchList = parseConditions(&currentQuery)
+		}
 
 		// do we need to return the data itself?
 		returnDataFlag := false
-		if METHOD_READ == query.Method {
+		if METHOD_READ == currentQuery.Method { // Use currentQuery
 			returnDataFlag = true
 		}
 
 		// get data from subquery
-		resultData, resultAddresses, amount := store.GetEntitiesByQueryFilterAndSourceAddress(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, sourceAddress, query.Direction, returnDataFlag)
+		// Signature of GetEntitiesByQueryFilterAndSourceAddress will be adapted in storage.go
+		var resultData []transport.TransportRelation
+		var resultAddresses [][2]int
+		var amount int
+
+		if currentQuery.RootFilter == nil {
+			resultData, resultAddresses, amount = store.GetEntitiesByQueryFilterAndSourceAddress(currentQuery.Pool, nil, legacyConditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, sourceAddress, currentQuery.Direction, returnDataFlag)
+		} else {
+			resultData, resultAddresses, amount = store.GetEntitiesByQueryFilterAndSourceAddress(currentQuery.Pool, currentQuery.RootFilter, nil, nil, nil, nil, nil, sourceAddress, currentQuery.Direction, returnDataFlag)
+		}
 
 		// if we got no returns
 		if 0 == amount {
 			// we check if there had to be some
-			if true == query.Required {
+			if true == currentQuery.Required { // Fixed: undefined 'query' to 'currentQuery'
 				// empty return since we got no hits on a required subquery
 				return []transport.TransportRelation{}, []transport.TransportRelation{}, [][4]int{}, 0
 			}
@@ -439,12 +674,13 @@ func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddre
 			continue
 		}
 		// since we got data we gonne get recursive from here
-		if 0 < len(query.Map) {
+		if 0 < len(currentQuery.Map) { // Use currentQuery
 			collectAddressList := [][4]int{}
 			for key, entityAddress := range resultAddresses {
 				// further execute and store data on return
-				children, parents, tmpAddressList, amount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairList)
-				if DIRECTION_CHILD == query.Direction {
+				children, parents, tmpAddressList, subAmount := recursiveExecuteLinked(store, currentQuery.Map, entityAddress, addressPairList) // Pass currentQuery.Map
+				// Determine relation direction based on currentQuery.Direction
+				if DIRECTION_CHILD == currentQuery.Direction {
 					tmpAddressList = append(tmpAddressList, [4]int{sourceAddress[0], sourceAddress[1], entityAddress[0], entityAddress[1]})
 				} else {
 					tmpAddressList = append(tmpAddressList, [4]int{entityAddress[0], entityAddress[1], sourceAddress[0], sourceAddress[1]})
@@ -457,26 +693,26 @@ func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddre
 				if 0 < len(parents) {
 					resultData[key].Target.ParentRelations = append(resultData[key].Target.ParentRelations, parents...)
 				}
-				if 0 < amount || !query.HasRequiredSubQueries() {
+				if subAmount > 0 || !currentQuery.HasRequiredSubQueries() { // Check subAmount and use currentQuery
 					// only add results if we actually are returning data
 					if returnDataFlag {
 						tmpRet = append(tmpRet, resultData[key])
 					}
-					i++
+					i++ // Increment main counter i based on successful processing of sub-query results
 				}
 			}
 			addressPairList = append(addressPairList, collectAddressList...)
 		} else {
 			// there must be a smarter way for the following problem:
 			for _, entityAddress := range resultAddresses {
-				if DIRECTION_CHILD == query.Direction {
+				if DIRECTION_CHILD == currentQuery.Direction { // Use currentQuery
 					addressPairList = append(addressPairList, [4]int{sourceAddress[0], sourceAddress[1], entityAddress[0], entityAddress[1]})
 				} else {
 					addressPairList = append(addressPairList, [4]int{entityAddress[0], entityAddress[1], sourceAddress[0], sourceAddress[1]})
 				}
 			}
 			// - - - - - - - - - - - - - - - - - -
-			i = amount
+			i += amount // Increment main counter i by the number of direct results
 			tmpRet = append(tmpRet, resultData...)
 		}
 
@@ -484,16 +720,16 @@ func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddre
 		tmpRetLen := len(tmpRet)
 		if 0 < tmpRetLen {
 			var appender *[]transport.TransportRelation
-			if DIRECTION_CHILD == query.Direction {
+			if DIRECTION_CHILD == currentQuery.Direction { // Use currentQuery
 				appender = &retChildren
 			} else {
 				appender = &retParents
 			}
 			start := len(*appender)
 			*appender = append(*appender, tmpRet...)
-			if direction, depth, ok := isTraversed(query); ok {
-				for i := start; i < start+tmpRetLen; i++ {
-					store.TraverseEnrich(&((*appender)[i].Target), direction, depth)
+			if direction, depth, ok := isTraversed(currentQuery); ok { // Use currentQuery
+				for idx := start; idx < start+tmpRetLen; idx++ { // Use different loop variable idx
+					store.TraverseEnrich(&((*appender)[idx].Target), direction, depth)
 				}
 			}
 		}

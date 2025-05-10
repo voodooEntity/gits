@@ -25,6 +25,9 @@
 - Easy integration as a standalone library
 - No third party dependencies
 - Simple builder based query language (json compatible)
+- Enhanced query filtering with complex, nested AND/OR/NOT conditions.
+- Enhanced `Link` operations with ability to specify context and properties for new relations.
+- Enhanced `Unlink` operations with ability to target specific relations by matching their context or properties.
 - Option to create/map nested structures at once (json compatible)
 - Native directed graph structure support
 - Full access via direct storage api
@@ -204,4 +207,3 @@ The following list contains topics that will be the focus of future major update
 
 > [laughingman.dev](https://blog.laughingman.dev) &nbsp;&middot;&nbsp;
 > GitHub [@voodooEntity](https://github.com/voodooEntity)
-
