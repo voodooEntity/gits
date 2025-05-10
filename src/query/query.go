@@ -1,10 +1,11 @@
 package query
 
 import (
-	"github.com/voodooEntity/gits/src/storage"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/voodooEntity/gits/src/storage"
 
 	"github.com/voodooEntity/gits/src/mutexhandler"
 	"github.com/voodooEntity/gits/src/transport"
@@ -224,18 +225,11 @@ func (self *Query) Limit(amount int) *Query {
 }
 
 func Execute(store *storage.Storage, query *Query) transport.Transport {
-	// no type pool = something is very wrong
 	if 0 == len(query.Pool) {
 		return transport.Transport{}
 	}
 
-	// prepare mutex handler
 	mutexh := mutexhandler.New(store)
-
-	// we are in the most outer layer so we gonne lock here,
-	// also dispatch what type of mutex we need. if we only read
-	// we can work with a read lock, everything else will need a
-	// full lock
 	if METHOD_READ == query.Method {
 		mutexh.Apply(mutexhandler.EntityTypeRLock)
 		mutexh.Apply(mutexhandler.EntityStorageRLock)
@@ -244,9 +238,7 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 		mutexh.Apply(mutexhandler.EntityStorageLock)
 	}
 
-	// do we have any potential joins? if yes we need to read lock the relation storage
 	if 0 < len(query.Map) {
-		// if its link method or unlink method we need to write lock the relation storage
 		if METHOD_LINK == query.Method || METHOD_UNLINK == query.Method {
 			mutexh.Apply(mutexhandler.RelationStorageLock)
 		} else {
@@ -254,79 +246,72 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 		}
 	}
 
-	// some dispatches for special query variables
-	// do we need to return the data itself?
 	var addressPairs [][4]int
 	returnDataFlag := false
 	linked := true
 	linkAddresses := [2][][2]int{}
 	linkAmount := 0
+
 	if METHOD_READ == query.Method {
 		returnDataFlag = true
 	}
-	// is it a link query ? needs to be handled different
 	if METHOD_LINK == query.Method {
 		linked = false
 	}
 
-	// parse the conditions into our 2 neccesary groups
 	baseMatchList, propertyMatchList := parseConditions(query)
+	initialResultData, initialResultAddresses, initialAmount := store.GetEntitiesByQueryFilter(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, returnDataFlag)
 
-	// now we need to fetch the list of entities fitting to our filters
-	resultData, resultAddresses, amount := store.GetEntitiesByQueryFilter(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, returnDataFlag)
-
-	// prepare transport data
 	ret := transport.Transport{
 		Amount: 0,
 	}
 
-	// wo we have any hits?
-	if 0 == amount {
-		// no hits
+	if 0 == initialAmount {
 		mutexh.Release()
 		return ret
 	}
 
-	// do we have child queries to execute recursive?
-	if 0 < len(query.Map) {
-		// do we work with linked data? this gonne be the main case
-		if linked {
-			collectAddressPairs := [][4]int{}
-			for key, entityAddress := range resultAddresses {
-				// recursive execute our actions
-				children, parents, tmpAddressPairs, subAmount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairs)
+	var finalFilteredAddresses [][2]int
+	var tempEntitiesForRead []transport.TransportEntity
 
-				// make sure required subquery actually returns data
-				// this doesnt check if required ones are included
-				// only if any relations are given - but the recursive
-				// method will return no datasets if a required map
-				// is not fit so it should be fine - revalidate later ###
+	if 0 < len(query.Map) {
+		if linked { // Path for Read-with-joins, Update, Delete, Unlink
+			collectAddressPairs := [][4]int{}
+			for key, entityAddress := range initialResultAddresses {
+				// Pass empty `addressPairs` for this call as it's for filtering/populating, not Unlink pair collection at this level
+				childrenFromSubquery, parentsFromSubquery, tmpAddressPairsFromSub, subAmount := recursiveExecuteLinked(store, query.Map, entityAddress, [][4]int{})
+
 				if query.HasRequiredSubQueries() && subAmount == 0 {
 					continue
 				}
+				finalFilteredAddresses = append(finalFilteredAddresses, entityAddress)
 
-				// append the current addresspairs since it can be used for unlinking or other funny stuff
-				collectAddressPairs = append(collectAddressPairs, tmpAddressPairs...) // i dont like it but ok for now ### todo overthink
-				// now if given store children and parents entities
-				if 0 < len(children) {
-					resultData[key].ChildRelations = append(resultData[key].ChildRelations, children...)
+				if query.Method == METHOD_UNLINK {
+					// tmpAddressPairsFromSub contains pairs from subqueries linked to entityAddress
+					collectAddressPairs = append(collectAddressPairs, tmpAddressPairsFromSub...)
 				}
-				if 0 < len(parents) {
-					resultData[key].ParentRelations = append(resultData[key].ParentRelations, parents...)
-				}
-				//archivist.Info("addressPairs", tmpAddressPairs)
 
-				// are there any results?
-				if 0 < amount || !query.HasRequiredSubQueries() { // revalidate the !query.HasRequired... case ###
-					ret.Amount++
-					// do we have any data to add? (and it is a read)
-					if METHOD_READ == query.Method {
-						ret.Entities = append(ret.Entities, resultData[key])
+				if METHOD_READ == query.Method {
+					currentEntityDataForRead := initialResultData[key]
+					if 0 < len(childrenFromSubquery) {
+						currentEntityDataForRead.ChildRelations = append(currentEntityDataForRead.ChildRelations, childrenFromSubquery...)
 					}
+					if 0 < len(parentsFromSubquery) {
+						currentEntityDataForRead.ParentRelations = append(currentEntityDataForRead.ParentRelations, parentsFromSubquery...)
+					}
+					tempEntitiesForRead = append(tempEntitiesForRead, currentEntityDataForRead)
 				}
 			}
-			addressPairs = append(addressPairs, collectAddressPairs...)
-		} else { // unlinked data - for now the only case for this is the METHOD_LINK method so we gonne hard handle it that way ###todo maybe expand it on need to have unlinked joins (dont see any case rn)
+			if query.Method == METHOD_UNLINK {
+				addressPairs = collectAddressPairs // Use the collected pairs
+			}
+			if METHOD_READ == query.Method {
+				ret.Entities = tempEntitiesForRead
+			}
+			ret.Amount = len(finalFilteredAddresses)
+
+		} else { // Path for METHOD_LINK (linked = false)
+			finalFilteredAddresses = initialResultAddresses
 			for _, targetQuery := range query.Map {
 				tagretBaseMatchList, targetPopertyMatchList := parseConditions(&targetQuery)
 				_, tmpLinkAddresses, tmpLinkAmount := store.GetEntitiesByQueryFilter(targetQuery.Pool, targetQuery.Conditions, tagretBaseMatchList[FILTER_ID], tagretBaseMatchList[FILTER_VALUE], tagretBaseMatchList[FILTER_CONTEXT], targetPopertyMatchList, false)
@@ -335,188 +320,204 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 					linkAmount = linkAmount + tmpLinkAmount
 				}
 			}
-			ret.Amount = amount
+			ret.Amount = initialAmount
 		}
-	} else {
-		ret.Entities = resultData
-		ret.Amount = amount
+	} else { // No subqueries in query.Map
+		finalFilteredAddresses = initialResultAddresses
+		if METHOD_READ == query.Method {
+			ret.Entities = initialResultData
+		}
+		ret.Amount = initialAmount
 	}
 
-	if 0 < ret.Amount {
-		// now we need to dispatch based on method what we gonne do
-		switch query.Method {
-		case METHOD_UPDATE:
-			// if we got any results and values to update given fire Batch update
-			if 0 < len(query.Values) {
-				store.BatchUpdateAddressList(resultAddresses, query.Values)
-			}
-		case METHOD_DELETE:
-			store.BatchDeleteAddressList(resultAddresses)
-		case METHOD_LINK:
-			affectedAmount := 0
-			if 0 < linkAmount {
-				for direction, tmpLinkAddresses := range linkAddresses {
-					if 0 < len(tmpLinkAddresses) {
-						if DIRECTION_CHILD == direction {
-							affectedAmount += store.LinkAddressLists(resultAddresses, tmpLinkAddresses)
-						} else { // else it must be towards parent so we flip params
-							affectedAmount += store.LinkAddressLists(tmpLinkAddresses, resultAddresses)
-						}
+	if query.Method == METHOD_UPDATE || query.Method == METHOD_DELETE || query.Method == METHOD_READ {
+		if len(finalFilteredAddresses) == 0 {
+			mutexh.Release()
+			return transport.Transport{}
+		}
+		if query.Method == METHOD_UPDATE || query.Method == METHOD_DELETE {
+			ret.Amount = len(finalFilteredAddresses)
+		}
+		// For METHOD_READ, ret.Amount is already len(finalFilteredAddresses) or initialAmount if no map.
+	} else if query.Method == METHOD_UNLINK {
+		if len(addressPairs) == 0 {
+			mutexh.Release()
+			return transport.Transport{}
+		}
+	} else if query.Method == METHOD_LINK {
+		if len(finalFilteredAddresses) == 0 || linkAmount == 0 {
+			ret.Amount = 0 // No sources or no targets means 0 links will be made.
+		}
+		// ret.Amount will be updated to affectedAmount later by the LINK case.
+	}
+
+	switch query.Method {
+	case METHOD_UPDATE:
+		if 0 < len(query.Values) && len(finalFilteredAddresses) > 0 {
+			store.BatchUpdateAddressList(finalFilteredAddresses, query.Values)
+		}
+		ret.Amount = len(finalFilteredAddresses) // Ensure Amount reflects actual items considered for update
+	case METHOD_DELETE:
+		if len(finalFilteredAddresses) > 0 {
+			store.BatchDeleteAddressList(finalFilteredAddresses)
+		}
+		ret.Amount = len(finalFilteredAddresses) // Ensure Amount reflects actual items considered for delete
+	case METHOD_LINK:
+		affectedAmount := 0
+		if 0 < linkAmount && len(finalFilteredAddresses) > 0 {
+			for direction, currentTargetAddresses := range linkAddresses {
+				if 0 < len(currentTargetAddresses) {
+					if DIRECTION_CHILD == direction {
+						affectedAmount += store.LinkAddressLists(finalFilteredAddresses, currentTargetAddresses)
+					} else {
+						affectedAmount += store.LinkAddressLists(currentTargetAddresses, finalFilteredAddresses)
 					}
 				}
 			}
-			ret.Amount = affectedAmount
-		case METHOD_UNLINK:
-			affectedAmount := 0
-			if 0 < len(addressPairs) {
-				for _, addressPair := range addressPairs {
-					store.DeleteRelationUnsafe(addressPair[0], addressPair[1], addressPair[2], addressPair[3])
-					affectedAmount++
-				}
-			}
-			ret.Amount = affectedAmount
-		case METHOD_READ:
-			// add traverse data for root level entities - only for read
-			if direction, depth, traversed := isTraversed(*query); traversed {
-				for id, _ := range ret.Entities {
-					store.TraverseEnrich(&(ret.Entities[id]), direction, depth)
-				}
+		}
+		ret.Amount = affectedAmount
+	case METHOD_UNLINK:
+		affectedAmount := 0
+		if 0 < len(addressPairs) {
+			for _, addressPair := range addressPairs {
+				store.DeleteRelationUnsafe(addressPair[0], addressPair[1], addressPair[2], addressPair[3])
+				affectedAmount++
 			}
 		}
+		ret.Amount = affectedAmount
+	case METHOD_READ:
+		if direction, depth, traversed := isTraversed(*query); traversed {
+			for id := range ret.Entities {
+				store.TraverseEnrich(&(ret.Entities[id]), direction, depth)
+			}
+		}
+	}
 
-		// do we have to sort?
+	if METHOD_READ == query.Method || ((query.Method == METHOD_UPDATE || query.Method == METHOD_DELETE) && returnDataFlag) {
 		if (Order{}) != query.Sort {
 			ret.Entities = sortResults(ret.Entities, query.Sort.Field, query.Sort.Direction, query.Sort.Mode)
 		}
-
-		// finally check if we need to reduce due to given limit
-		// not the optimal implementation in terms of resource usage
-		// because if there is no order we could limit earlier in the query
-		// process but for now we gonne run with this solution ### revisit
 		limit := getLimitIfExists(*query)
 		if -1 != limit {
 			if len(ret.Entities) > limit {
 				ret.Entities = ret.Entities[:limit]
+				if METHOD_READ == query.Method { // Only adjust amount for READ if limited
+					ret.Amount = len(ret.Entities)
+				}
 			}
 		}
-
-		// release all the mutex and provide the data
-		mutexh.Release()
-		return ret
 	}
 
-	// if there were no results we still need to unlock all the mutex
 	mutexh.Release()
-	return transport.Transport{}
+	return ret
 }
 
-func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddress [2]int, addressPairList [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
+func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddress [2]int, addressPairListFromCaller [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
 	var retParents []transport.TransportRelation
 	var retChildren []transport.TransportRelation
-	i := 0
-	for _, query := range queries {
-		var tmpRet []transport.TransportRelation
-		// parse the conditions into our 2 necessary groups
-		baseMatchList, propertyMatchList := parseConditions(&query)
+	var collectedAddressPairsForUnlink [][4]int // Pairs formed at this level of recursion
 
-		// do we need to return the data itself?
-		returnDataFlag := false
-		if METHOD_READ == query.Method {
-			returnDataFlag = true
+	overallSuccessfulPathsForThisLevel := 0
+
+	for _, currentSubQuery := range queries {
+		var fullyProcessedSubRelationsForCurrentQuery []transport.TransportRelation
+		baseMatchList, propertyMatchList := parseConditions(&currentSubQuery)
+
+		subQueryReturnDataFlag := false
+		if METHOD_READ == currentSubQuery.Method {
+			subQueryReturnDataFlag = true
 		}
 
-		// get data from subquery
-		resultData, resultAddresses, amount := store.GetEntitiesByQueryFilterAndSourceAddress(query.Pool, query.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, sourceAddress, query.Direction, returnDataFlag)
+		resultSubData, resultSubAddresses, directMatchCount := store.GetEntitiesByQueryFilterAndSourceAddress(currentSubQuery.Pool, currentSubQuery.Conditions, baseMatchList[FILTER_ID], baseMatchList[FILTER_VALUE], baseMatchList[FILTER_CONTEXT], propertyMatchList, sourceAddress, currentSubQuery.Direction, subQueryReturnDataFlag)
 
-		// if we got no returns
-		if 0 == amount {
-			// we check if there had to be some
-			if true == query.Required {
-				// empty return since we got no hits on a required subquery
+		if 0 == directMatchCount {
+			if true == currentSubQuery.Required {
 				return []transport.TransportRelation{}, []transport.TransportRelation{}, [][4]int{}, 0
 			}
-			// if not we just continue
 			continue
 		}
-		// since we got data we gonne get recursive from here
-		if 0 < len(query.Map) {
-			collectAddressList := [][4]int{}
-			for key, entityAddress := range resultAddresses {
-				// further execute and store data on return
-				children, parents, tmpAddressList, amount := recursiveExecuteLinked(store, query.Map, entityAddress, addressPairList)
-				if DIRECTION_CHILD == query.Direction {
-					tmpAddressList = append(tmpAddressList, [4]int{sourceAddress[0], sourceAddress[1], entityAddress[0], entityAddress[1]})
-				} else {
-					tmpAddressList = append(tmpAddressList, [4]int{entityAddress[0], entityAddress[1], sourceAddress[0], sourceAddress[1]})
+
+		successfulPathsThroughCurrentSubQuery := 0
+
+		if 0 < len(currentSubQuery.Map) { // currentSubQuery has nested children/parents
+			for key, relatedEntityAddress := range resultSubAddresses {
+				// Pass empty [][4]int{} for addressPairListFromCaller to nested calls,
+				// as pair collection is per level for Unlink.
+				nestedChildren, nestedParents, _, nestedSubAmount := recursiveExecuteLinked(store, currentSubQuery.Map, relatedEntityAddress, [][4]int{}) // nestedAddressPairs assigned to _
+
+				if currentSubQuery.HasRequiredSubQueries() && nestedSubAmount == 0 {
+					continue // This relatedEntityAddress failed its own required nested join.
 				}
 
-				collectAddressList = append(collectAddressList, tmpAddressList...)
-				if 0 < len(children) {
-					resultData[key].Target.ChildRelations = append(resultData[key].Target.ChildRelations, children...)
-				}
-				if 0 < len(parents) {
-					resultData[key].Target.ParentRelations = append(resultData[key].Target.ParentRelations, parents...)
-				}
-				if 0 < amount || !query.HasRequiredSubQueries() {
-					// only add results if we actually are returning data
-					if returnDataFlag {
-						tmpRet = append(tmpRet, resultData[key])
+				successfulPathsThroughCurrentSubQuery++
+
+				if subQueryReturnDataFlag {
+					currentRelation := resultSubData[key]
+					if 0 < len(nestedChildren) {
+						currentRelation.Target.ChildRelations = append(currentRelation.Target.ChildRelations, nestedChildren...)
 					}
-					i++
+					if 0 < len(nestedParents) {
+						currentRelation.Target.ParentRelations = append(currentRelation.Target.ParentRelations, nestedParents...)
+					}
+					fullyProcessedSubRelationsForCurrentQuery = append(fullyProcessedSubRelationsForCurrentQuery, currentRelation)
 				}
-			}
-			addressPairList = append(addressPairList, collectAddressList...)
-		} else {
-			// there must be a smarter way for the following problem:
-			for _, entityAddress := range resultAddresses {
-				if DIRECTION_CHILD == query.Direction {
-					addressPairList = append(addressPairList, [4]int{sourceAddress[0], sourceAddress[1], entityAddress[0], entityAddress[1]})
+				// Collect pairs for Unlink: these are pairs formed by sourceAddress and relatedEntityAddress,
+				// assuming this path (including nested) is valid.
+				if DIRECTION_CHILD == currentSubQuery.Direction {
+					collectedAddressPairsForUnlink = append(collectedAddressPairsForUnlink, [4]int{sourceAddress[0], sourceAddress[1], relatedEntityAddress[0], relatedEntityAddress[1]})
 				} else {
-					addressPairList = append(addressPairList, [4]int{entityAddress[0], entityAddress[1], sourceAddress[0], sourceAddress[1]})
+					collectedAddressPairsForUnlink = append(collectedAddressPairsForUnlink, [4]int{relatedEntityAddress[0], relatedEntityAddress[1], sourceAddress[0], sourceAddress[1]})
+				}
+				// Note: nestedAddressPairs are not directly used here, they would have been handled by deeper Unlink if query was structured that way.
+			}
+		} else { // currentSubQuery has no nested children/parents
+			successfulPathsThroughCurrentSubQuery = directMatchCount
+			if subQueryReturnDataFlag {
+				fullyProcessedSubRelationsForCurrentQuery = append(fullyProcessedSubRelationsForCurrentQuery, resultSubData...)
+			}
+			for _, relatedEntityAddress := range resultSubAddresses {
+				if DIRECTION_CHILD == currentSubQuery.Direction {
+					collectedAddressPairsForUnlink = append(collectedAddressPairsForUnlink, [4]int{sourceAddress[0], sourceAddress[1], relatedEntityAddress[0], relatedEntityAddress[1]})
+				} else {
+					collectedAddressPairsForUnlink = append(collectedAddressPairsForUnlink, [4]int{relatedEntityAddress[0], relatedEntityAddress[1], sourceAddress[0], sourceAddress[1]})
 				}
 			}
-			// - - - - - - - - - - - - - - - - - -
-			i = amount
-			tmpRet = append(tmpRet, resultData...)
 		}
 
-		// if we got any results we add them
-		tmpRetLen := len(tmpRet)
-		if 0 < tmpRetLen {
+		if successfulPathsThroughCurrentSubQuery == 0 && currentSubQuery.Required {
+			return []transport.TransportRelation{}, []transport.TransportRelation{}, [][4]int{}, 0
+		}
+
+		overallSuccessfulPathsForThisLevel += successfulPathsThroughCurrentSubQuery
+
+		if subQueryReturnDataFlag && 0 < len(fullyProcessedSubRelationsForCurrentQuery) {
 			var appender *[]transport.TransportRelation
-			if DIRECTION_CHILD == query.Direction {
+			if DIRECTION_CHILD == currentSubQuery.Direction {
 				appender = &retChildren
 			} else {
 				appender = &retParents
 			}
 			start := len(*appender)
-			*appender = append(*appender, tmpRet...)
-			if direction, depth, ok := isTraversed(query); ok {
-				for i := start; i < start+tmpRetLen; i++ {
-					store.TraverseEnrich(&((*appender)[i].Target), direction, depth)
+			*appender = append(*appender, fullyProcessedSubRelationsForCurrentQuery...)
+			if direction, depth, ok := isTraversed(currentSubQuery); ok {
+				for idx := start; idx < len(*appender); idx++ {
+					store.TraverseEnrich(&((*appender)[idx].Target), direction, depth)
 				}
 			}
 		}
 	}
-	return retChildren, retParents, addressPairList, i
+	return retChildren, retParents, collectedAddressPairsForUnlink, overallSuccessfulPathsForThisLevel
 }
 
 func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
-	// now we need to identify what we are searching for
-	//  0 => ID, 1 => Value , 2 => Context
 	baseMatchList := [3][][]int{{}, {}, {}}
 	propertyMatchList := []map[string][]int{}
 	for conditionGroupKey, conditionGroup := range query.Conditions {
-		// sub allocate arrays for each condition group to make sure we dont have missing entries
-		// slices u know...
-		// first for the base filters
 		for _, filterGroup := range [3]int{FILTER_ID, FILTER_VALUE, FILTER_CONTEXT} {
 			baseMatchList[filterGroup] = append(baseMatchList[filterGroup], []int{})
 			baseMatchList[filterGroup][conditionGroupKey] = []int{}
 		}
-		// than for the property filter
 		propertyMatchList = append(propertyMatchList, map[string][]int{})
-		// than we actually parse the conditions
 		for conditionKey, conditionValue := range conditionGroup {
 			switch conditionValue[0] {
 			case "ID":
@@ -527,8 +528,11 @@ func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
 				baseMatchList[FILTER_CONTEXT][conditionGroupKey] = append(baseMatchList[FILTER_CONTEXT][conditionGroupKey], conditionKey)
 			default:
 				if -1 != strings.Index(conditionValue[0], "Properties") {
-					// ### we need to prepare the map here if it doesn't exist
-					propertyMatchList[conditionGroupKey][conditionValue[0][11:]] = append(propertyMatchList[conditionGroupKey][conditionValue[0][11:]], conditionKey)
+					propertyName := conditionValue[0][11:]
+					if _, ok := propertyMatchList[conditionGroupKey][propertyName]; !ok {
+						propertyMatchList[conditionGroupKey][propertyName] = []int{}
+					}
+					propertyMatchList[conditionGroupKey][propertyName] = append(propertyMatchList[conditionGroupKey][propertyName], conditionKey)
 				}
 			}
 		}
@@ -538,11 +542,9 @@ func parseConditions(query *Query) ([3][][]int, []map[string][]int) {
 
 func sortResults(results []transport.TransportEntity, field string, direction int, mode int) []transport.TransportEntity {
 	cl := func(i, j int) bool {
-		// get the values
 		sAlpha := results[i].GetFieldByString(field)
 		sBeta := results[j].GetFieldByString(field)
 
-		// if mode is numeric we need to int cast the values
 		if ORDER_MODE_NUM == mode {
 			iAlpha, erra := strconv.ParseInt(sAlpha, 10, 64)
 			iBeta, errb := strconv.ParseInt(sBeta, 10, 64)
@@ -551,7 +553,7 @@ func sortResults(results []transport.TransportEntity, field string, direction in
 					return true
 				}
 			}
-		} else { // alphabetical search
+		} else {
 			sLowerAlpha := strings.ToLower(sAlpha)
 			sLowerBeta := strings.ToLower(sBeta)
 			if sLowerAlpha == sLowerBeta {
@@ -587,15 +589,12 @@ func isTraversed(qry Query) (int, int, bool) {
 				if 3 == tmpLen {
 					direction, err := strconv.ParseInt(mode[1], 10, 64)
 					if nil != err {
-						// archivist.Info("Invalid traverse direction given. Skipping") ###todo overthink if false should be err and we return that info somehoow
 						return -1, -1, false
 					}
 					depth, err := strconv.ParseInt(mode[2], 10, 64)
 					if nil != err {
-						// archivist.Info("Invalid traverse depth given. Skipping") ###todo overthink if false should be err and we return that info somehoow
 						return -1, -1, false
 					}
-
 					return int(direction), int(depth), true
 				}
 			}
@@ -654,8 +653,6 @@ POSTPROCESSING:
 -> ORDER BY % ASC/DESC  [X]
 -> TraverseOut          [X]
 -> TraverseIn           [X]
--> LIMIT                [ ]
-
-
+-> LIMIT                [ ] // Implemented but not in this list?
 
 */
