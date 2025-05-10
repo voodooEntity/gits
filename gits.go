@@ -42,10 +42,10 @@ func SetDefault(name string) {
 	instances.SetDefault(name)
 }
 
-func defunc_RemoveInstance(name string) {
-	instances.defunc_Remove(name)
-	return
-}
+//func defunc_RemoveInstance(name string) {
+//	instances.defunc_Remove(name)
+//	return
+//}
 
 // deprecated -> use query adapter New() instead
 func NewQuery() *query.Query {
