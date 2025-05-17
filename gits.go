@@ -17,7 +17,6 @@ type Gits struct {
 	Name    string
 	storage *storage.Storage
 	logs    log.Logger
-	//config  *config.Config ### todo consider config
 }
 
 func NewInstance(name string) *Gits {
@@ -41,11 +40,6 @@ func GetByName(name string) *Gits {
 func SetDefault(name string) {
 	instances.SetDefault(name)
 }
-
-//func defunc_RemoveInstance(name string) {
-//	instances.defunc_Remove(name)
-//	return
-//}
 
 // deprecated -> use query adapter New() instead
 func NewQuery() *query.Query {
@@ -119,6 +113,11 @@ func (ii instanceIndex) SetDefault(name string) {
 
 func (ii instanceIndex) GetByName(name string) *Gits {
 	instanceMutex.RLock()
+	if _, ok := instances[name]; !ok {
+		instanceMutex.RUnlock()
+		fmt.Println("Instance name not existing : '" + name + "'")
+		return nil
+	}
 	ret := instances[name]
 	instanceMutex.RUnlock()
 	return ret
