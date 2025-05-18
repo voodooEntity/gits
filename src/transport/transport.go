@@ -1,6 +1,9 @@
 package transport
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 type Transport struct {
 	Entities  []TransportEntity
@@ -54,7 +57,7 @@ func (self *TransportEntity) Parents() []TransportEntity {
 func (self *TransportEntity) GetFieldByString(field string) string {
 	switch field {
 	case "ID":
-		return string(self.ID)
+		return strconv.Itoa(self.ID)
 	case "Context":
 		return self.Context
 	case "Value":
