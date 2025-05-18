@@ -56,7 +56,7 @@ The following use cases are example either applications in which i used GITS or 
 ### Setup
 Since GITS is a library, the setup is really simple and only consists of requiring GITS into your existing go project
 ```bash
-go get github.com/voodooEntity/gits@0.9.1
+go get github.com/voodooEntity/gits@0.9.6
 ```
 
 ### Usage
@@ -174,28 +174,26 @@ While GITS is designed for optimal performance through in-memory handling and op
 ## Roadmap
 The following list contains topics that will be the focus of future major updates. This list is not ordered. 
 
+- [ ] Persistence option
+  - Reimplement (optional) asynchronous persistence via interface, while also providing a package delivering a simple file based persistence  
 - [ ] Enhance query capabilities
   - Right now the query builder/language has certain limitations especially in context of methods like "Link","Unlink" and the possibilities to create complex Match(Filter) conditions. This should be enhanced by reworking the query parser and enhancing the query.Query functionality.
   - The current return format for linked data is nested struct instances. While this is very comfortable to work with, it also has certain limitations. Therefor it should also be possible to get the return in a flat format.
 - [ ] Enhance test coverage
-  - As for now, only the query builder/parser is fully tested. This should be extended to cover as much code as (usefully) possible.
+  - As for now, only the query builder/parser is mostly fully tested (91%). This should be extended to cover as much code as (usefully) possible.
 
 
 ## Changelog
 ### Latest Release Changes
-* Massive restructuring of gits in order to make it more accessible and easier to get into for newcomers. This changes are leading towards the first stabled release and include:
-  * Enable multiple storages due to factory pattern
-  * Add a global tracking of storages and easy accessibility
-  * Move the storage to storage.go package and make gits.go the main interface
-  * Add simple interface in gits.go to enable query'ing and storage access
-  * Remove old persistence implementation
-  * Rework README.md and add [full Documentation](./DOCS/README.md)
-* Bugfixes
-  * Fixing an issue on which a array out of index error could occure on nested Reduce() queries
-  * Adjusting Match() and OrMatch() when used with "Properties." to require the results to have the searched Property name.
-  * Bugfix addresslist memory exception 
+* removing outcommented codes
+* adjusting broken links in readme
+* add code cover files to gitignore
+* cleanup query.go, add more testcases for latest bugfix
+* adjust transport entity getter function
+* some corrections in README.md
 
-[Full Changelog](CHANGELOG.md) - [Latest Release](https://github.com/voodooEntity/gits/releases/tag/0.9.1)
+
+[Full Changelog](CHANGELOG.md) - [Latest Release](https://github.com/voodooEntity/gits/releases/tag/v0.9.6)
 
 ## License
 [GNU General Public License v3.0](./LICENSE)
