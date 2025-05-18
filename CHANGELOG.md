@@ -1,5 +1,27 @@
 # Changelog
 
+## Cleanup : v0.9.6   `18.5.2025`
+* removing outcommented codes
+* adjusting broken links in readme
+* add code cover files to gitignore
+* cleanup query.go, add more testcases for latest bugfix
+* adjust transport entity getter function
+* some corrections in README.md
+
+## Small bugfix :  v0.9.5   `10.5.2025`
+* experimental fix for bug in update queries with complex subdependencies 
+
+## Small additions :  v0.9.4   `12.12.2024`
+* f0o wishes by @voodooEntity in #17
+* Adding Limit() function to query - only applies on root level queries
+* Re-enabling Remove storage method (experimental!) - Note: if you keep any pointer to something related to the "Removed" storage the GC won't remove the Storage.
+
+## Small bugfix :  v0.9.3   `8.12.2024`
+* 2nd bugfix for required split join query
+
+## Small bugfix :  v0.9.2   `7.12.2024`
+* fix bug on required subquery 
+
 ## Major restructuring : 0.9.1  `8.11.2024`
 * Massive restructuring of gits in order to make it more accessible and easier to get into for newcomers. This changes are leading towards the first stabled release and include:
   * Enable multiple storages due to factory pattern
