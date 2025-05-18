@@ -365,7 +365,6 @@ func TestReadJoinMatchWithMultipleRequiredMatch(t *testing.T) {
 		New().Read("Test").Match("Value", "==", "TestABC").Match("Context", "==", "TestABC"),
 	)
 	ret := Execute(testStorage, qry)
-	fmt.Println("data return", ret)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
@@ -423,7 +422,6 @@ func TestFindValidTokenRequest(t *testing.T) {
 		New().Read("Token").Match("Value", "==", "findme").Match("Context", "==", "TestABC"),
 	)
 	ret := Execute(testStorage, qry)
-	fmt.Println("data return", ret)
 	if 1 != len(ret.Entities) {
 		t.Error(ret)
 	}
@@ -694,79 +692,6 @@ func TestQueryUnlinkReverse(t *testing.T) {
 	})
 }
 
-func review_TestbuildTestQueryJson(t *testing.T) {
-	initStorage()
-	qry := New().Read("IP").To(
-		New().Read("Port").To(
-			New().Read("Software"),
-		),
-	)
-	printData(qry)
-}
-
-func review_TestbuildTestQueryJson2(t *testing.T) {
-	initStorage()
-	qry := New().Read("IP").To(
-		New().Read("Port").To(
-			New().Read("Software").To(
-				New().Read("Vhost"),
-			),
-		),
-	)
-	printData(qry)
-}
-
-func review_TestbuildTestQueryJson3(t *testing.T) {
-	qry := New().Read("IP").To(
-		New().Read("Port").To(
-			New().Read("Software").To(
-				New().Read("Vhost"),
-			),
-		).To(
-			New().Read("Software"),
-		),
-	)
-	printData(qry)
-}
-
-func review_TestbuildTestQueryJsonGetQbQueries(t *testing.T) {
-	initStorage()
-	//
-	fmt.Println("Get all marketplaces implemented by Max Mustermann from person")
-	qry := New().Read("Person").Match("Value", "==", "Max Mustermann").To(
-		New().Read("Marketplace").Match("Properties.IsAbstract", "==", "false"),
-	).To(
-		New().Read("Marketplace").To(
-			New().Read("Marketplace"),
-		),
-	)
-	//printData(qry)
-
-	//
-	fmt.Println("Get all marketplaces shipping to germany")
-	qry = New().Read("Marketplace").To(
-		New().Reduce("Country").Match("Value", "==", "Germany"),
-	)
-	//printData(qry)
-
-	//
-	fmt.Println("Get all marketplaces ")
-	qry = New().Read("Person").Match("Value", "==", "Max Mustermann").To(
-		New().Read("Marketplace"),
-	).To(
-		New().Read("Marketplace").To(
-			New().Read("Marketplace"),
-		),
-	)
-	printData(qry)
-
-	fmt.Println("Get Person that implemented marketplace")
-	qry = New().Read("Marketplace").From(
-		New().Read("Person"),
-	)
-	//printData(qry)
-}
-
 func TestRequiredAndOptionalMixedAlpha(t *testing.T) {
 	initStorage()
 	// create the testdata
@@ -878,7 +803,6 @@ func TestRequiredQueryJoinInDepthFail(t *testing.T) {
 	initStorage()
 	testdata := mapQbStructureMap()
 	testStorage.MapTransportData(testdata)
-	fmt.Println(" - - - - - - - - - Test required first level join  - - - - - - - - -")
 	qry := New().Read("Person").To(
 		New().Read("Marketplace").To(
 			New().Read("Person"),
@@ -935,7 +859,6 @@ func TestLimitButLessDatasets(t *testing.T) {
 func TestRequiredQueryJoinInDepthSuccess(t *testing.T) {
 	testdata := mapQbStructureMap()
 	testStorage.MapTransportData(testdata)
-	fmt.Println(" - - - - - - - - - Test required first level join  - - - - - - - - -")
 	qry := New().Read("Person").To(
 		New().Read("Marketplace").To(
 			New().Read("Country"),
@@ -1241,6 +1164,196 @@ func TestUpdateWithRequiredSubqueryFilter(t *testing.T) {
 	if updateResult.Amount != 1 {
 		t.Errorf("TestUpdateWithRequiredSubqueryFilter: Update operation reported affecting %d entities, expected 1", updateResult.Amount)
 	}
+}
+
+func TestComplexNestedUnlinkConditioning(t *testing.T) {
+	initStorage()
+
+	checkVal := "iShouldNotGetChanged"
+	checkField := "TestProperty"
+
+	// first we map our testdata
+	testStorage.MapTransportData(transport.TransportEntity{
+		ID:    storage.MAP_FORCE_CREATE,
+		Type:  "IP",
+		Value: "127.0.0.1",
+		Properties: map[string]string{
+			checkField: checkVal,
+		},
+		ChildRelations: []transport.TransportRelation{
+			transport.TransportRelation{
+				Target: transport.TransportEntity{
+					ID:    storage.MAP_FORCE_CREATE,
+					Type:  "Port",
+					Value: "80",
+					ChildRelations: []transport.TransportRelation{
+						transport.TransportRelation{
+							Target: transport.TransportEntity{
+								ID:    storage.MAP_FORCE_CREATE,
+								Type:  "Banner",
+								Value: "Apache 2.4",
+							},
+						},
+						transport.TransportRelation{
+							Target: transport.TransportEntity{
+								ID:    storage.MAP_FORCE_CREATE,
+								Type:  "Vhost",
+								Value: "127.0.0.1",
+								ChildRelations: []transport.TransportRelation{
+									transport.TransportRelation{
+										Target: transport.TransportEntity{
+											ID:    storage.MAP_FORCE_CREATE,
+											Type:  "Directory",
+											Value: "/",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			transport.TransportRelation{
+				Target: transport.TransportEntity{
+					ID:    storage.MAP_FORCE_CREATE,
+					Type:  "Port",
+					Value: "22",
+					ChildRelations: []transport.TransportRelation{
+						transport.TransportRelation{
+							Target: transport.TransportEntity{
+								ID:    storage.MAP_FORCE_CREATE,
+								Type:  "Software",
+								Value: "sshd 2.3.4",
+								ChildRelations: []transport.TransportRelation{
+									transport.TransportRelation{
+										Target: transport.TransportEntity{
+											ID:    storage.MAP_FORCE_CREATE,
+											Type:  "CVE",
+											Value: "ASDASD123123",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	// first we check if we correctly can read it
+	pre := New().Read("IP").Match("Properties."+checkField, "==", checkVal).To(
+		New().Reduce("Port").Match("Value", "==", "80").To(
+			New().Reduce("Banner").Match("Value", "==", "Apache 2.4"),
+		).To(
+			New().Reduce("Vhost").Match("Value", "==", "127.0.0.1").To(
+				New().Reduce("Directory").Match("Value", "==", "/"),
+			),
+		),
+	).To(
+		New().Reduce("Port").Match("Value", "==", "22").To(
+			New().Reduce("Software").Match("Value", "==", "sshd 2.3.4").To(
+				New().Reduce("CVE").Match("Value", "==", "ASDASD123123"),
+			),
+		),
+	)
+	preRet := Execute(testStorage, pre)
+	if len(preRet.Entities) != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter Pre Failed : Expected 1 IP, got %d", len(preRet.Entities))
+	}
+
+	// now we create a "complex" query to check if it
+	// still gets changed : first check , if on multi nested parallel condition 1 fails
+	testA := New().Update("IP").Set("Properties."+checkField, "nope").To(
+		New().Reduce("Port").Match("Value", "==", "80").To(
+			New().Reduce("Banner").Match("Value", "==", "Apache 2.4"),
+		).To(
+			New().Reduce("Vhost").Match("Value", "==", "127.0.0.2").To(
+				New().Reduce("Directory").Match("Value", "==", "/"),
+			),
+		),
+	).To(
+		New().Reduce("Port").Match("Value", "==", "22").To(
+			New().Reduce("Software").Match("Value", "==", "sshd 2.3.4").To(
+				New().Reduce("CVE").Match("Value", "==", "ASDASD123123"),
+			),
+		),
+	)
+	Execute(testStorage, testA)
+	ret := Execute(testStorage, New().Read("IP").Match("Properties."+checkField, "==", checkVal))
+	if len(ret.Entities) != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter Check 1: Expected 1 IP, got %d", len(ret.Entities))
+	}
+
+	// second test, if we got on a multi level 1 canTo and 1 To on same level and see if the optional creates a fail success
+	testB := New().Update("IP").Set("Properties."+checkField, "nope").To(
+		New().Reduce("Port").Match("Value", "==", "81").To( // changed port
+			New().Reduce("Banner").Match("Value", "==", "Apache 2.3"),
+		).CanTo(
+			New().Reduce("Vhost").Match("Value", "==", "127.0.0.1").To(
+				New().Reduce("Directory").Match("Value", "==", "/"),
+			),
+		),
+	).To(
+		New().Reduce("Port").Match("Value", "==", "22").To(
+			New().Reduce("Software").Match("Value", "==", "sshd 2.3.4").To(
+				New().Reduce("CVE").Match("Value", "==", "ASDASD123123"),
+			),
+		),
+	)
+	Execute(testStorage, testB)
+	ret = Execute(testStorage, New().Read("IP").Match("Properties."+checkField, "==", checkVal))
+	if len(ret.Entities) != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter Check 2: Expected 1 IP, got %d", len(ret.Entities))
+	}
+
+	// third test, if we got on fist join level 1 to and 1 canto and see if it behaves correctly
+	testC := New().Update("IP").Set("Properties."+checkField, "nope").To(
+		New().Reduce("Port").Match("Value", "==", "80").To(
+			New().Reduce("Banner").Match("Value", "==", "Apache 2.4"),
+		).To(
+			New().Reduce("Vhost").Match("Value", "==", "127.0.0.1").To(
+				New().Reduce("Directory").Match("Value", "==", "/phpmyadmin/"), // changed directory
+			),
+		),
+	).CanTo(
+		New().Reduce("Port").Match("Value", "==", "22").To(
+			New().Reduce("Software").Match("Value", "==", "sshd 2.3.4").To(
+				New().Reduce("CVE").Match("Value", "==", "ASDASD123123"),
+			),
+		),
+	)
+	Execute(testStorage, testC)
+	ret = Execute(testStorage, New().Read("IP").Match("Properties."+checkField, "==", checkVal))
+	if len(ret.Entities) != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter Check 3: Expected 1 IP, got %d", len(ret.Entities))
+	}
+
+	// third test, if we got on fist join level 1 to and 1 canto and see if it behaves correctly
+	testD := New().Read("IP").Match("Properties."+checkField, "==", checkVal).To(
+		New().Reduce("Port").Match("Value", "==", "80").To(
+			New().Reduce("Banner").Match("Value", "==", "Apache 2.4"),
+		).To(
+			New().Reduce("Vhost").Match("Value", "==", "127.0.0.1").To(
+				New().Reduce("Directory").Match("Value", "==", "/phpmyadmin"), // changed directory
+			),
+		),
+	).CanTo(
+		New().Reduce("Port").Match("Value", "==", "22").To(
+			New().Reduce("Software").Match("Value", "==", "sshd 2.3.4").To(
+				New().Reduce("CVE").Match("Value", "==", "ASDASD123123"),
+			),
+		),
+	)
+	Execute(testStorage, testD)
+	ret = Execute(testStorage, New().Read("IP").Match("Properties."+checkField, "==", checkVal))
+	if len(ret.Entities) != 1 {
+		t.Errorf("TestUpdateWithRequiredSubqueryFilter Check 4: Expected 1 IP, got %d", len(ret.Entities))
+	}
+
+	t.Cleanup(func() {
+		Cleanup()
+	})
 }
 
 func Cleanup() {

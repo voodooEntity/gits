@@ -129,7 +129,7 @@ rootIntID := myGitsInstance.MapData(transport.TransportEntity{
 ```
 As you can see in the example, we are passing a nested structure to the MapTransport function. You can map a single dataset or any amount of nested datasets. Since we are using the MAP_FORCE_CREATE constant both datasets will definitely be created. The return of MapTransport is always the ID of the root dataset passed to the method.
 
-For more detailed information on the capabilities of MapTransport please check "MapTransport Examples & Details" addlink
+For more detailed information on the capabilities of MapTransport please check [MapTransport Examples & Details](DOCS/DATA_MAPPING.md#examples)
 
 #### Using the Query Builder
 The most simple way to access data in a GITS storage is to use the inbuilt query language builder. While the GITS custom query builder options may be limited, they include the most important options to cover a wide range of use cases. 

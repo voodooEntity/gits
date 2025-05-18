@@ -2,3 +2,4 @@ cmd/lab/
 cmd/lab/*
 .idea
 src/storage/storage_test.go
+*cover.out

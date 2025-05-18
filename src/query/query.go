@@ -185,6 +185,7 @@ func (self *Query) CanFrom(query *Query) *Query {
 	return self
 }
 
+// ### deprecated
 func (self *Query) Modify(properties ...string) *Query {
 	self.Mode = append(self.Mode, properties)
 	return self
@@ -278,8 +279,7 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 		if linked { // Path for Read-with-joins, Update, Delete, Unlink
 			collectAddressPairs := [][4]int{}
 			for key, entityAddress := range initialResultAddresses {
-				// Pass empty `addressPairs` for this call as it's for filtering/populating, not Unlink pair collection at this level
-				childrenFromSubquery, parentsFromSubquery, tmpAddressPairsFromSub, subAmount := recursiveExecuteLinked(store, query.Map, entityAddress, [][4]int{})
+				childrenFromSubquery, parentsFromSubquery, tmpAddressPairsFromSub, subAmount := recursiveExecuteLinked(store, query.Map, entityAddress)
 
 				if query.HasRequiredSubQueries() && subAmount == 0 {
 					continue
@@ -412,7 +412,7 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 	return ret
 }
 
-func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddress [2]int, addressPairListFromCaller [][4]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
+func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddress [2]int) ([]transport.TransportRelation, []transport.TransportRelation, [][4]int, int) {
 	var retParents []transport.TransportRelation
 	var retChildren []transport.TransportRelation
 	var collectedAddressPairsForUnlink [][4]int // Pairs formed at this level of recursion
@@ -443,7 +443,7 @@ func recursiveExecuteLinked(store *storage.Storage, queries []Query, sourceAddre
 			for key, relatedEntityAddress := range resultSubAddresses {
 				// Pass empty [][4]int{} for addressPairListFromCaller to nested calls,
 				// as pair collection is per level for Unlink.
-				nestedChildren, nestedParents, _, nestedSubAmount := recursiveExecuteLinked(store, currentSubQuery.Map, relatedEntityAddress, [][4]int{}) // nestedAddressPairs assigned to _
+				nestedChildren, nestedParents, _, nestedSubAmount := recursiveExecuteLinked(store, currentSubQuery.Map, relatedEntityAddress)
 
 				if currentSubQuery.HasRequiredSubQueries() && nestedSubAmount == 0 {
 					continue // This relatedEntityAddress failed its own required nested join.
@@ -653,6 +653,6 @@ POSTPROCESSING:
 -> ORDER BY % ASC/DESC  [X]
 -> TraverseOut          [X]
 -> TraverseIn           [X]
--> LIMIT                [ ] // Implemented but not in this list?
+-> LIMIT                [X]
 
 */
