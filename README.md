@@ -84,7 +84,7 @@ GITS can serve as an ultra-fast, in-memory cache for pre-computed or frequently 
 ### Setup
 Since GITS is a library, the setup is really simple and only consists of requiring GITS into your existing go project
 ```bash
-go get github.com/voodooEntity/gits@0.9.6
+go get github.com/voodooEntity/gits@0.9.7
 ```
 
 ### Usage
