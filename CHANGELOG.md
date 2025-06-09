@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.7   `9.6.2025`
+* Adding CascadeIn(depth int) and CascadeOut(depth) mthods to Query struct, which can be used to have deletes cascade over multiple levels.
+* Adding tests for CascadeIn and CascadeOut
+* Adding base info for Cascade methods to docs
+
 ## Cleanup : v0.9.6   `18.5.2025`
 * removing outcommented codes
 * adjusting broken links in readme
