@@ -172,28 +172,27 @@ For more information please refer to ["Storage API Reference and Examples"](DOCS
 While GITS is designed for optimal performance through in-memory handling and optimized indexing, understanding the underlying storage architecture can further enhance its usage. For a detailed explanation of this architecture, please refer to the following documentation: [Storage Architecture](DOCS/STORAGE_ARCHITECTURE.md)
 
 ## Roadmap
-The following list contains topics that will be the focus of future major updates. This list is not ordered. 
+The following list contains topics that will be the focus of future major updates. This list is not ordered. These are planned after 1.0.0 stable release. 
 
 - [ ] Persistence option
   - Reimplement (optional) asynchronous persistence via interface, while also providing a package delivering a simple file based persistence  
+- [ ] Enhance test coverage
+  - As for now, only the query builder/parser is mostly fully tested (91%). This should be extended to cover as much code as (usefully) possible.
 - [ ] Enhance query capabilities
   - Right now the query builder/language has certain limitations especially in context of methods like "Link","Unlink" and the possibilities to create complex Match(Filter) conditions. This should be enhanced by reworking the query parser and enhancing the query.Query functionality.
   - The current return format for linked data is nested struct instances. While this is very comfortable to work with, it also has certain limitations. Therefor it should also be possible to get the return in a flat format.
-- [ ] Enhance test coverage
-  - As for now, only the query builder/parser is mostly fully tested (91%). This should be extended to cover as much code as (usefully) possible.
 
 
 ## Changelog
 ### Latest Release Changes
-* removing outcommented codes
-* adjusting broken links in readme
-* add code cover files to gitignore
-* cleanup query.go, add more testcases for latest bugfix
-* adjust transport entity getter function
-* some corrections in README.md
+
+* Adding CascadeIn(depth int) and CascadeOut(depth) mthods to Query struct, which can be used to have deletes cascade over multiple levels.
+* Adding tests for CascadeIn and CascadeOut
+* Adding base info for Cascade methods to docs
 
 
-[Full Changelog](CHANGELOG.md) - [Latest Release](https://github.com/voodooEntity/gits/releases/tag/v0.9.6)
+
+[Full Changelog](CHANGELOG.md) - [Latest Release](https://github.com/voodooEntity/gits/releases/tag/v0.9.7)
 
 ## License
 [GNU General Public License v3.0](./LICENSE)
