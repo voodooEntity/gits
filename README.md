@@ -37,7 +37,7 @@ GITS is designed to simplify the management of complex data structures in Go app
 
 While offering a straightforward query interface for most use cases, GITS also exposes an underlying storage API for advanced optimization. This flexibility allows GITS to accommodate a broad spectrum of applications, from high-performance in-memory object storage to intricate information network mapping.
 
-## Use Cases aka Why GITS?
+## Use Cases Examples aka Why GITS?
 
 ### 1. Real-time Processing & Live Analytics (Volatile Data)
 
