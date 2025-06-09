@@ -12,7 +12,7 @@
 <p align="center">
   <a href="#key-features">Key Features</a> •
   <a href="#about">About</a> •
-  <a href="#use-cases">Use Cases</a> •
+  <a href="#use-cases-aka-why-gits">Use Cases</a> •
   <a href="#how-to-use">How To Use</a> •
   <a href="#roadmap">Roadmap</a> •
   <a href="DOCS/README.md">Documentation</a> •
@@ -37,19 +37,57 @@ GITS is designed to simplify the management of complex data structures in Go app
 
 While offering a straightforward query interface for most use cases, GITS also exposes an underlying storage API for advanced optimization. This flexibility allows GITS to accommodate a broad spectrum of applications, from high-performance in-memory object storage to intricate information network mapping.
 
-## Use Cases
-The following use cases are example either applications in which i used GITS or ideas that came to my mind in which using GITS could be beneficial. Apart from that, GITS can be used in any environment that can benefit from the features it provides.
+## Use Cases aka Why GITS?
 
-- Corona Dashboard
-  - Back in the main phase of corona i created my own dashboard hosting and showing the current infection/etc statistics for countries/states/ and other subnational units. A crawler collected information from official sources at an hourly rate and mapped them into the storage. This data was fully kept in memory till i hit my servers limits (20gb ~). 
-- Webcrawler
-  - Due to GITS offering the mapping of data in graph structure, you can create complex networks - in this case websites/pages and the interlinking in between those. Due to the index being in memory - lookups for already existing entries and such are very fast. 
-- File importer
-  - You got a very large XML export with different nested sections and ID relations in between those. You can easily use GITS to map the data and than simply retrieve the complete structures for exporting/processing instead of having to use multiple lookups every time.
-- NFT trader
-  - GITS was used to keep track of NFT trading transactions and evaluate possible arbitrary trades based on the data kept in memory. Since such arbitrary trading is very time sensitive, an in memory storage was optimal. 
-- go-cyberbrain
-  - A longterm project of myself (which i initially created SlingshotDB for). It's a processing/computing framework which allows for self supervising/automated processing of data.  
+### 1. Real-time Processing & Live Analytics (Volatile Data)
+
+GITS is perfect for scenarios where data is constantly flowing, quickly generated, or only relevant for a short period, allowing for immediate insights without the overhead of disk I/O.
+
+* **Real-time Anomaly Detection in Streaming Data:**
+  * **How:** Ingest event streams (e.g., financial transactions, IoT sensor data, system logs), building a temporary graph of interconnected entities (users, devices, IPs) and their interactions within a sliding time window.
+  * **Why GITS:** Rapidly traverse these dynamic relationships to identify unusual patterns, suspicious activity, or system deviations as they happen. The graph is ephemeral, focusing on the current state for immediate action, not historical storage.
+* **Dynamic Workflow Execution & Dependency Resolution:**
+  * **How:** For complex, short-lived computational workflows or batch processing jobs, model individual tasks and their execution dependencies (e.g., "Task B requires output from Task A," "Task C can run in parallel with Task D").
+  * **Why GITS:** Concurrently update task states and quickly query the graph to determine the next executable tasks, manage conditional branching, and identify bottlenecks in real-time. The workflow graph exists only for the duration of its execution.
+* **Live Network Flow Analysis:**
+  * **How:** Ingest real-time network packet data, building a graph of connections between IP addresses, ports, and protocols for a rolling time window (e.g., the last 5 minutes).
+  * **Why GITS:** Instantly detect anomalies, identify denial-of-service (DoS) attacks, or visualize active connections. The in-memory nature allows for extremely high data ingestion and query throughput, and older flow data can be gracefully discarded as new data arrives.
+
+### 2. Temporary Data Staging & Complex Transformations
+
+Use GITS as a powerful, intermediate workspace for processing highly connected data before it's moved, stored elsewhere, or discarded.
+
+* **Advanced Data Ingestion & ETL Pipelines:**
+  * **How:** Ingest complex, semi-structured data (e.g., large XML exports, sensor logs, historical transaction batches) into GITS. Use its graph capabilities to clean, enrich, deduplicate (by finding linked duplicate records), or restructure data by traversing relationships, before exporting it to a traditional database or data warehouse.
+  * **Why GITS:** Perform intricate, graph-based transformations and lookups that are cumbersome or slow with traditional relational databases, acting as a high-speed, transient staging area for the "Transform" phase of Extract, Transform, Load (ETL) processes.
+* **Web Crawler Session Graph:**
+  * **How:** Map crawled web pages, their internal and external links, and encountered assets (images, scripts) during a *single crawling session*.
+  * **Why GITS:** Rapidly check for already visited pages, identify link structures, or find new paths to explore without hitting disk I/O. The graph is built for the current crawl, and its findings (e.g., unique URLs, link statistics) are exported or summarized at the end.
+* **Complex Document Parsing & Flattening:**
+  * **How:** Load a deeply nested or interconnected document (e.g., a massive JSON/XML report with many internal references) into GITS, creating entities for sections and relations for references.
+  * **Why GITS:** Easily navigate and "flatten" complex document structures by traversing relations, allowing for quick extraction of specific sub-graphs or reconstruction of complete objects, without needing to maintain the full memory of nested pointers.
+
+### 3. Graph-based Caching for Rapid Lookups
+
+GITS can serve as an ultra-fast, in-memory cache for pre-computed or frequently accessed graph data loaded from a slower, persistent source.
+
+* **Pre-calculated Recommendation Cache:**
+  * **How:** An offline recommendation engine (running on a persistent database) pre-calculates a large graph of "users who might like X" or "items frequently bought together." This graph is loaded into GITS on application startup.
+  * **Why GITS:** Serve personalized recommendations with lightning-fast latency directly from memory, handling high request volumes. If the application restarts, the cache can be quickly reloaded from its persistent source.
+* **Dynamic Authorization & Policy Cache:**
+  * **How:** Load frequently accessed security policies, user roles, resource permissions, and complex access rule relationships from a persistent database into GITS on application startup.
+  * **Why GITS:** Perform rapid authorization checks across multiple concurrent requests. The in-memory graph provides sub-millisecond lookup times for complex "who can access what" questions, avoiding repeated, slow database queries.
+
+### 4. Concurrent Session Management with Complex State
+
+For applications requiring intricate, interconnected state management for individual user sessions or transient processes.
+
+* **Interactive User Journey Analysis (Per Session):**
+  * **How:** During a user's web session, track their navigation path, clicked elements, product views, and their relationships to other items or categories.
+  * **Why GITS:** Adapt content, provide real-time suggestions, or offer dynamic discounts based on the user's evolving preferences within that single session. The graph is built and discarded with the session's conclusion.
+* **Complex Shopping Cart Dependencies:**
+  * **How:** For an e-commerce platform, model items in a user's shopping cart, promotional bundles, discounts, and their interdependencies (e.g., "if item A is in cart, item B is required for discount").
+  * **Why GITS:** Quickly validate complex cart rules, calculate real-time discounts, or suggest complementary items during a single user's shopping experience, ensuring a highly responsive and dynamic checkout process.
 
 
 ## How to use
