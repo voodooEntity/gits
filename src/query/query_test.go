@@ -1356,6 +1356,260 @@ func TestComplexNestedUnlinkConditioning(t *testing.T) {
 	})
 }
 
+// Helper to create a complex graph for cascade tests
+func createComplexCascadeTestData() {
+	// Clear storage first for clean test runs
+	Cleanup()
+	initStorage()
+
+	// Create Entity Types
+	rootType, _ := testStorage.CreateEntityType("Root")
+	l1Type, _ := testStorage.CreateEntityType("L1")
+	l2Type, _ := testStorage.CreateEntityType("L2")
+	l3Type, _ := testStorage.CreateEntityType("L3")
+	orphanType, _ := testStorage.CreateEntityType("Orphan")
+	isolatedType, _ := testStorage.CreateEntityType("Isolated")
+
+	// Create Entities
+	rootEntityID, _ := testStorage.CreateEntity(types.StorageEntity{Type: rootType, Value: "Root", Context: "main"})
+	l1AID, _ := testStorage.CreateEntity(types.StorageEntity{Type: l1Type, Value: "L1A", Context: "main"})
+	l1BID, _ := testStorage.CreateEntity(types.StorageEntity{Type: l1Type, Value: "L1B", Context: "side"})
+	l2AID, _ := testStorage.CreateEntity(types.StorageEntity{Type: l2Type, Value: "L2A", Context: "main"})
+	l3AID, _ := testStorage.CreateEntity(types.StorageEntity{Type: l3Type, Value: "L3A", Context: "main"})
+	orphanedChildID, _ := testStorage.CreateEntity(types.StorageEntity{Type: orphanType, Value: "Orphaned", Context: "orphan"})
+	testStorage.CreateEntity(types.StorageEntity{Type: isolatedType, Value: "Isolated", Context: "alone"})
+
+	// Create Relations
+	// Root -> L1A (MainPath)
+	testStorage.CreateRelationUnsafe(rootType, rootEntityID, l1Type, l1AID, types.StorageRelation{SourceType: rootType, SourceID: rootEntityID, TargetType: l1Type, TargetID: l1AID, Context: "MainPath"})
+	// Root -> L1B (SidePath)
+	testStorage.CreateRelationUnsafe(rootType, rootEntityID, l1Type, l1BID, types.StorageRelation{SourceType: rootType, SourceID: rootEntityID, TargetType: l1Type, TargetID: l1BID, Context: "SidePath"})
+
+	// L1A -> L2A
+	testStorage.CreateRelationUnsafe(l1Type, l1AID, l2Type, l2AID, types.StorageRelation{SourceType: l1Type, SourceID: l1AID, TargetType: l2Type, TargetID: l2AID})
+	// L1B -> OrphanedChild
+	testStorage.CreateRelationUnsafe(l1Type, l1BID, orphanType, orphanedChildID, types.StorageRelation{SourceType: l1Type, SourceID: l1BID, TargetType: orphanType, TargetID: orphanedChildID, Context: "ToOrphaned"})
+
+	// L2A -> L3A
+	testStorage.CreateRelationUnsafe(l2Type, l2AID, l3Type, l3AID, types.StorageRelation{SourceType: l2Type, SourceID: l2AID, TargetType: l3Type, TargetID: l3AID})
+
+	// Add a reverse link for cycle testing (L2A -> RootEntity)
+	testStorage.CreateRelationUnsafe(l2Type, l2AID, rootType, rootEntityID, types.StorageRelation{SourceType: l2Type, SourceID: l2AID, TargetType: rootType, TargetID: rootEntityID, Context: "CycleBack"})
+
+	testStorage.CreateRelationUnsafe(rootType, rootEntityID, l2Type, l2AID, types.StorageRelation{SourceType: rootType, SourceID: rootEntityID, TargetType: l2Type, TargetID: l2AID, Context: "CycleBack"})
+}
+
+// Helper to get total entity count of specific types
+func getEntityCountInTest(t *testing.T, types ...string) int {
+	t.Helper()
+	if len(types) == 0 {
+		types = []string{"Root", "L1", "L2", "L3", "Orphan", "Isolated"} // All types in test data
+	}
+	qry := New().Read(types...)
+	res := Execute(testStorage, qry)
+	return res.Amount
+}
+
+// Helper to check if a specific entity exists
+func checkEntityExistence(t *testing.T, entityType, entityValue string, expectedToExist bool) {
+	t.Helper()
+	qry := New().Read(entityType).Match("Value", "==", entityValue)
+	res := Execute(testStorage, qry)
+	exists := len(res.Entities) == 1
+
+	if exists != expectedToExist {
+		if expectedToExist {
+			t.Errorf("FAIL: Expected %s (Value: %s) to exist, but it was deleted.", entityType, entityValue)
+		} else {
+			t.Errorf("FAIL: Expected %s (Value: %s) to be deleted, but it still exists.", entityType, entityValue)
+		}
+	}
+}
+
+func TestCascadeOutDepth1_SpecificNonDeleted(t *testing.T) {
+	createComplexCascadeTestData() // Resets and creates fresh data
+	defer Cleanup()
+
+	initialCount := getEntityCountInTest(t) // Should be 7
+	if initialCount != 7 {
+		t.Fatalf("Initial entity count mismatch. Expected 7, got %d. Check test data setup.", initialCount)
+	}
+
+	// Delete Root with CascadeOut(1)
+	// Expected: Root, L1A, L1B (direct children via MainPath/SidePath)
+	// AND L2A (direct child via the "CycleBack" link, as Root -> L2A is now a direct relation)
+	// Total 4 entities.
+	qry := New().Delete("Root").Match("Value", "==", "Root").CascadeOut(1)
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 4 { // CHANGED: Expected 4 entities
+		t.Errorf("Expected 4 entities to be deleted, got %d", result.Amount)
+	}
+
+	checkEntityExistence(t, "Root", "Root", false)
+	checkEntityExistence(t, "L1", "L1A", false)
+	checkEntityExistence(t, "L1", "L1B", false)
+	checkEntityExistence(t, "L2", "L2A", false) // CHANGED: Expected to be deleted
+
+	// Verify non-deleted entities
+	checkEntityExistence(t, "L3", "L3A", true)            // Deeper than depth 1 (child of L2A, but L2A is now gone)
+	checkEntityExistence(t, "Orphan", "Orphaned", true)   // Deeper than depth 1 (child of L1B, but L1B is now gone)
+	checkEntityExistence(t, "Isolated", "Isolated", true) // Not linked to cascade path
+}
+
+func TestCascadeOutDepth2_SpecificNonDeleted(t *testing.T) {
+	createComplexCascadeTestData()
+	defer Cleanup()
+
+	initialCount := getEntityCountInTest(t) // Should be 7
+	if initialCount != 7 {
+		t.Fatalf("Initial entity count mismatch. Expected 7, got %d. Check test data setup.", initialCount)
+	}
+
+	// Delete Root with CascadeOut(2)
+	// Path 1: Root(0) -> L1A(1) -> L2A(2)
+	// Path 2: Root(0) -> L1B(1) -> OrphanedChild(2)
+	// Path 3: Root(0) -> L2A(1) -> L3A(2)  <-- This path now includes L3A at depth 2
+	// Expected: Root, L1A, L1B, L2A, OrphanedChild, L3A
+	// Total 6 entities.
+	qry := New().Delete("Root").Match("Value", "==", "Root").CascadeOut(2)
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 6 { // CHANGED: Expected 6 entities
+		t.Errorf("Expected 6 entities to be deleted, got %d", result.Amount)
+	}
+
+	checkEntityExistence(t, "Root", "Root", false)
+	checkEntityExistence(t, "L1", "L1A", false)
+	checkEntityExistence(t, "L1", "L1B", false)
+	checkEntityExistence(t, "L2", "L2A", false)
+	checkEntityExistence(t, "Orphan", "Orphaned", false)
+	checkEntityExistence(t, "L3", "L3A", false) // CHANGED: Expected to be deleted
+
+	// Verify non-deleted entities
+	checkEntityExistence(t, "Isolated", "Isolated", true) // Not linked
+}
+
+func TestCascadeOutInfinite_SpecificNonDeleted(t *testing.T) {
+	createComplexCascadeTestData()
+	defer Cleanup()
+
+	initialCount := getEntityCountInTest(t) // Should be 7
+	if initialCount != 7 {
+		t.Fatalf("Initial entity count mismatch. Expected 7, got %d. Check test data setup.", initialCount)
+	}
+
+	// Delete Root with CascadeOut(0) - infinite depth
+	// Expected: Root, L1A, L1B, L2A, L3A, OrphanedChild
+	// Total 6 entities. (All except Isolated)
+	qry := New().Delete("Root").Match("Value", "==", "Root").CascadeOut(0) // 0 means infinite depth
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 6 {
+		t.Errorf("Expected 6 entities to be deleted, got %d", result.Amount)
+	}
+
+	checkEntityExistence(t, "Root", "Root", false)
+	checkEntityExistence(t, "L1", "L1A", false)
+	checkEntityExistence(t, "L1", "L1B", false)
+	checkEntityExistence(t, "L2", "L2A", false)
+	checkEntityExistence(t, "L3", "L3A", false)
+	checkEntityExistence(t, "Orphan", "Orphaned", false)
+
+	// Verify non-deleted entities
+	checkEntityExistence(t, "Isolated", "Isolated", true) // Not linked at all
+}
+
+func TestCascadeInDepth1_SpecificNonDeleted(t *testing.T) {
+	createComplexCascadeTestData()
+	defer Cleanup()
+
+	initialCount := getEntityCountInTest(t) // Should be 7
+	if initialCount != 7 {
+		t.Fatalf("Initial entity count mismatch. Expected 7, got %d. Check test data setup.", initialCount)
+	}
+
+	// Delete L2A with CascadeIn(1)
+	// Expected: L2A, L1A (parent of L2A)
+	// Also, Root (parent of L2A via CycleBack relation)
+	// Total 3 entities: L2A, L1A, Root
+	qry := New().Delete("L2").Match("Value", "==", "L2A").CascadeIn(1)
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 3 {
+		t.Errorf("Expected 3 entities to be deleted, got %d", result.Amount)
+	}
+
+	checkEntityExistence(t, "L2", "L2A", false)
+	checkEntityExistence(t, "L1", "L1A", false)
+	checkEntityExistence(t, "Root", "Root", false) // Deleted due to L2A -> Root (CycleBack) link at depth 1
+
+	// Verify non-deleted entities
+	checkEntityExistence(t, "L3", "L3A", true)            // Not on inward path (child of L2A)
+	checkEntityExistence(t, "L1", "L1B", true)            // Not on this path
+	checkEntityExistence(t, "Orphan", "Orphaned", true)   // Not on this path
+	checkEntityExistence(t, "Isolated", "Isolated", true) // Not linked
+}
+
+func TestCascadeInDepth2_SpecificNonDeleted(t *testing.T) {
+	createComplexCascadeTestData()
+	defer Cleanup()
+
+	initialCount := getEntityCountInTest(t) // Should be 7
+	if initialCount != 7 {
+		t.Fatalf("Initial entity count mismatch. Expected 7, got %d. Check test data setup.", initialCount)
+	}
+
+	// Delete L3A with CascadeIn(2)
+	// Expected: L3A, L2A (parent of L3A), L1A (parent of L2A), Root (parent of L2A via CycleBack)
+	// Total 4 entities.
+	qry := New().Delete("L3").Match("Value", "==", "L3A").CascadeIn(2)
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 4 {
+		t.Errorf("Expected 4 entities to be deleted, got %d", result.Amount)
+	}
+
+	checkEntityExistence(t, "L3", "L3A", false)
+	checkEntityExistence(t, "L2", "L2A", false)
+	checkEntityExistence(t, "L1", "L1A", false)
+	checkEntityExistence(t, "Root", "Root", false) // Deleted due to L2A -> Root (CycleBack) link at depth 1 from L2A
+
+	// Verify non-deleted entities
+	checkEntityExistence(t, "L1", "L1B", true)            // Not on this path
+	checkEntityExistence(t, "Orphan", "Orphaned", true)   // Not on this path
+	checkEntityExistence(t, "Isolated", "Isolated", true) // Not linked
+}
+
+func TestNoCascadeEffectWithoutCascadeMode(t *testing.T) {
+	createComplexCascadeTestData()
+	defer Cleanup()
+
+	initialCount := getEntityCountInTest(t) // Should be 7
+	if initialCount != 7 {
+		t.Fatalf("Initial entity count mismatch. Expected 7, got %d. Check test data setup.", initialCount)
+	}
+
+	// Delete Root WITHOUT Cascade option
+	// Expected: Only Root is deleted.
+	qry := New().Delete("Root").Match("Value", "==", "Root")
+	result := Execute(testStorage, qry)
+
+	if result.Amount != 1 {
+		t.Errorf("Expected 1 entity to be deleted, got %d", result.Amount)
+	}
+
+	checkEntityExistence(t, "Root", "Root", false)
+
+	// Verify all other entities are still there
+	checkEntityExistence(t, "L1", "L1A", true)
+	checkEntityExistence(t, "L1", "L1B", true)
+	checkEntityExistence(t, "L2", "L2A", true)
+	checkEntityExistence(t, "L3", "L3A", true)
+	checkEntityExistence(t, "Orphan", "Orphaned", true)
+	checkEntityExistence(t, "Isolated", "Isolated", true)
+}
+
 func Cleanup() {
 	testStorage.EntityStorage = make(map[int]map[int]types.StorageEntity)
 	testStorage.EntityIDMax = make(map[int]int)

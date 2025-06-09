@@ -63,7 +63,12 @@ The GITS Query Language is a custom implementation optimized for the usage with 
 * **TraverseOut(depth int)**: Traverses relationships outward (children) from the current entity up to a specified depth.
 * **TraverseIn(depth int)**: Traverses relationships inward (parents) up to a specified depth.
 
-**7. Executing the Query**
+**7. Cascading Delete**
+* **CascadeOut(depth int)**: Cascades relationships outward (children) from the current entity up to a specified depth and delete's them. When provided depth 0 it will follow relations without depth limitation
+* **CascadeIn(depth int)**: Traverses relationships inward (parents) up to a specified depth and delete's them. When provided depth 0 it will follow relations without depth limitation
+
+
+**8. Executing the Query**
 * **gitsInstance.Query().Execute(query *Query)**: Executes the query and returns the results.
 
 In the next step, we will provide practical examples to illustrate how to use these methods to construct complex queries. The query return prints will be in json format for practical reasons.
