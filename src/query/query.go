@@ -1,6 +1,7 @@
 package query
 
 import (
+	"github.com/voodooEntity/gits/src/types"
 	"sort"
 	"strconv"
 	"strings"
@@ -220,6 +221,16 @@ func (self *Query) TraverseIn(depth int) *Query {
 	return self
 }
 
+func (self *Query) CascadeOut(depth int) *Query {
+	self.Mode = append(self.Mode, []string{"Cascade", strconv.Itoa(DIRECTION_CHILD), strconv.Itoa(depth)})
+	return self
+}
+
+func (self *Query) CascadeIn(depth int) *Query {
+	self.Mode = append(self.Mode, []string{"Cascade", strconv.Itoa(DIRECTION_PARENT), strconv.Itoa(depth)})
+	return self
+}
+
 func (self *Query) Limit(amount int) *Query {
 	self.Mode = append(self.Mode, []string{"Limit", strconv.Itoa(amount)})
 	return self
@@ -358,10 +369,31 @@ func Execute(store *storage.Storage, query *Query) transport.Transport {
 		}
 		ret.Amount = len(finalFilteredAddresses) // Ensure Amount reflects actual items considered for update
 	case METHOD_DELETE:
-		if len(finalFilteredAddresses) > 0 {
-			store.BatchDeleteAddressList(finalFilteredAddresses)
+		if len(finalFilteredAddresses) == 0 {
+			return transport.Transport{}
 		}
-		ret.Amount = len(finalFilteredAddresses) // Ensure Amount reflects actual items considered for delete
+
+		cascadeDirection, cascadeDepth, isCascadingBool := isCascading(*query)
+		if isCascadingBool {
+			entitiesToDelete := make(map[[2]int]struct{})
+			// CHANGED: visited map type from map[[2]int]struct{} to map[[2]int]int
+			visitedDuringCollection := make(map[[2]int]int) // Stores min_depth_processed
+
+			for _, address := range finalFilteredAddresses {
+				collectEntitiesForCascadeDelete(store, address[0], address[1], cascadeDirection, 0, cascadeDepth, entitiesToDelete, visitedDuringCollection)
+			}
+
+			addressListForBatchDelete := make([][2]int, 0, len(entitiesToDelete))
+			for addr := range entitiesToDelete {
+				addressListForBatchDelete = append(addressListForBatchDelete, addr)
+			}
+
+			store.BatchDeleteAddressList(addressListForBatchDelete)
+			ret.Amount = len(addressListForBatchDelete)
+		} else {
+			store.BatchDeleteAddressList(finalFilteredAddresses)
+			ret.Amount = len(finalFilteredAddresses)
+		}
 	case METHOD_LINK:
 		affectedAmount := 0
 		if 0 < linkAmount && len(finalFilteredAddresses) > 0 {
@@ -601,6 +633,110 @@ func isTraversed(qry Query) (int, int, bool) {
 		}
 	}
 	return -1, -1, false
+}
+
+func isCascading(qry Query) (int, int, bool) {
+	if nil != qry.Mode {
+		for _, mode := range qry.Mode {
+			tmpLen := len(mode)
+			if 0 < tmpLen && "Cascade" == mode[0] {
+				if 3 == tmpLen {
+					direction, err := strconv.ParseInt(mode[1], 10, 64)
+					if nil != err {
+						return -1, -1, false
+					}
+					depth, err := strconv.ParseInt(mode[2], 10, 64)
+					if nil != err {
+						return -1, -1, false
+					}
+					return int(direction), int(depth), true
+				}
+			}
+		}
+	}
+	return -1, -1, false
+}
+
+// Arguments:
+//
+//	store: The storage instance to interact with the graph data.
+//	currentType: The type ID of the current entity being processed.
+//	currentID: The ID of the current entity being processed.
+//	direction: The direction of cascade (DIRECTION_CHILD or DIRECTION_PARENT).
+//	currentDepth: The current recursion depth (0 for initial entity, 1 for direct relations, etc.).
+//	maxDepth: The maximum allowed depth for the cascade (0 for no limit).
+//	entitiesToDelete: A map (set) to store all unique addresses ([type, id]) of entities marked for deletion.
+//	visited: A map to track entities already processed, storing the minimum depth at which they were processed.
+func collectEntitiesForCascadeDelete(
+	store *storage.Storage,
+	currentType int,
+	currentID int,
+	direction int, // DIRECTION_CHILD or DIRECTION_PARENT
+	currentDepth int,
+	maxDepth int,
+	entitiesToDelete map[[2]int]struct{}, // Set of entities to delete
+	visited map[[2]int]int, // Map: [typeID, entityID] -> min_depth_processed
+) {
+	currentAddress := [2]int{currentType, currentID}
+
+	// Always add the current entity to the set of entities to be deleted.
+	// The map automatically handles uniqueness.
+	entitiesToDelete[currentAddress] = struct{}{}
+
+	// Check if this node has been visited before.
+	if existingMinDepth, ok := visited[currentAddress]; ok {
+		// If we have already processed this node at a depth that is less than or equal to the current depth,
+		// it means we've already explored its children for a path that is as short or shorter.
+		// So, we don't need to re-explore its children from this path.
+		if existingMinDepth <= currentDepth {
+			return
+		}
+		// If existingMinDepth > currentDepth, it means we previously saw this node
+		// via a *deeper* path. We are now at a *shallower* path, so we should
+		// re-evaluate its children's inclusion if maxDepth allows it.
+		// In this case, we fall through to update `visited` and continue traversal.
+	}
+
+	// Update the visited map with the current (or new shallower) depth for this node.
+	visited[currentAddress] = currentDepth
+
+	// If we reach maxDepth for this specific path, we add the entity, but do not recurse further.
+	// maxDepth == 0 implies no limit (infinite depth).
+	if maxDepth != 0 && currentDepth >= maxDepth {
+		return
+	}
+
+	var relations map[int]types.StorageRelation
+	var err error
+
+	if DIRECTION_CHILD == direction {
+		relations, err = store.GetChildRelationsBySourceTypeAndSourceIdUnsafe(currentType, currentID, "")
+	} else { // DIRECTION_PARENT
+		relations, err = store.GetParentRelationsByTargetTypeAndTargetIdUnsafe(currentType, currentID, "")
+	}
+
+	if err != nil {
+		// In a production system, you might want to log this error.
+		// For now, we just stop this particular branch of traversal.
+		return
+	}
+
+	for _, rel := range relations {
+		var nextEntityType int
+		var nextEntityID int
+
+		// Determine the next entity in the cascade path based on direction
+		if DIRECTION_CHILD == direction {
+			nextEntityType = rel.TargetType
+			nextEntityID = rel.TargetID
+		} else { // DIRECTION_PARENT
+			nextEntityType = rel.SourceType
+			nextEntityID = rel.SourceID
+		}
+
+		// Recursively collect entities, incrementing depth
+		collectEntitiesForCascadeDelete(store, nextEntityType, nextEntityID, direction, currentDepth+1, maxDepth, entitiesToDelete, visited)
+	}
 }
 
 func getLimitIfExists(qry Query) int {
