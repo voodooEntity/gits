@@ -3,17 +3,67 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+
 	"github.com/voodooEntity/gits"
 	"github.com/voodooEntity/gits/src/query"
 	"github.com/voodooEntity/gits/src/storage"
 	"github.com/voodooEntity/gits/src/transport"
-	"strconv"
 )
 
 var g *gits.Gits
 var qa *gits.QueryAdapter
 
 func main() {
+
+	g = gits.NewInstance("examples")
+	qa = g.Query()
+
+	mapped := g.MapData(transport.TransportEntity{
+		Type:  "Alpha",
+		ID:    -1,
+		Value: "abc",
+		ChildRelations: []transport.TransportRelation{
+			{
+				Target: transport.TransportEntity{
+					Type:  "Beta",
+					ID:    -1,
+					Value: "def",
+				},
+			},
+			{
+				Target: transport.TransportEntity{
+					Type:  "Beta",
+					ID:    -1,
+					Value: "ghi",
+				},
+			},
+			{
+				Target: transport.TransportEntity{
+					Type:  "Beta",
+					ID:    -1,
+					Value: "jkl",
+				},
+			},
+			{
+				Target: transport.TransportEntity{
+					Type:  "Beta",
+					ID:    -1,
+					Value: "mno",
+				},
+			},
+		},
+	})
+	printResult(transport.Transport{Entities: []transport.TransportEntity{
+		mapped,
+	}})
+
+	qry := qa.New().Read("Alpha").To(qa.New().Read("Beta").Match("Value", "==", "def")).To(qa.New().Read("Beta"))
+	result := qa.Execute(qry)
+	printResult(result)
+}
+
+func main2() {
 	g = gits.NewInstance("examples")
 	qa = g.Query()
 
