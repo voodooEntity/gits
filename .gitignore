@@ -3,3 +3,6 @@ cmd/lab/*
 .idea
 src/storage/storage_test.go
 *cover.out
+.loa/
+.loa.json
+.loaignore
