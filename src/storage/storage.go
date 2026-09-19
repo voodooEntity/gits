@@ -3,6 +3,7 @@ package storage
 // handle all the imports
 import (
 	"errors"
+	"github.com/voodooEntity/gits/src/persistence"
 	"github.com/voodooEntity/gits/src/transport"
 	"github.com/voodooEntity/gits/src/types"
 	"regexp"
@@ -25,6 +26,8 @@ type Storage struct {
 	RelationStorage      map[int]map[int]map[int]map[int]types.StorageRelation
 	RelationRStorage     map[int]map[int]map[int]map[int]bool
 	RelationStorageMutex *sync.RWMutex
+
+	PersistenceManager *persistence.PersistenceManager
 }
 
 const (
@@ -77,6 +80,116 @@ func NewStorage() *Storage {
 		// relation storage master mutex
 		RelationStorageMutex: &sync.RWMutex{},
 	}
+}
+
+// enqueuePersistenceEvent hands an ordered mutation event to the optional persistence manager.
+// It must be called while the caller still holds the storage lock(s) that protected the
+// in-memory mutation so persisted order matches observable mutation order.
+func (s *Storage) enqueuePersistenceEvent(event *persistence.PersistenceEvent) {
+	if s.PersistenceManager != nil {
+		_ = s.PersistenceManager.Enqueue(event)
+	}
+}
+
+// ApplySnapshot loads a persisted snapshot into this storage while preserving stable identifiers.
+// It is intended for bootstrap before the storage is published, but uses the same lock order as
+// normal mutation paths so it remains safe if called on an already initialized storage.
+func (s *Storage) ApplySnapshot(snapshot *persistence.Snapshot) error {
+	if snapshot == nil {
+		return nil
+	}
+
+	s.EntityTypeMutex.Lock()
+	defer s.EntityTypeMutex.Unlock()
+
+	for name, id := range snapshot.EntityRTypes {
+		s.EntityRTypes[name] = id
+	}
+	for id, name := range snapshot.EntityTypes {
+		s.EntityTypes[id] = name
+		s.EntityRTypes[name] = id
+	}
+	if snapshot.EntityTypeIDMax > s.EntityTypeIDMax {
+		s.EntityTypeIDMax = snapshot.EntityTypeIDMax
+	}
+	for id := range s.EntityTypes {
+		if id > s.EntityTypeIDMax {
+			s.EntityTypeIDMax = id
+		}
+	}
+
+	s.EntityStorageMutex.Lock()
+	for entityType := range s.EntityTypes {
+		if _, ok := s.EntityStorage[entityType]; !ok {
+			s.EntityStorage[entityType] = make(map[int]types.StorageEntity)
+		}
+		if _, ok := s.EntityIDMax[entityType]; !ok {
+			s.EntityIDMax[entityType] = 0
+		}
+	}
+	for entityType, maxID := range snapshot.EntityIDMax {
+		if _, ok := s.EntityStorage[entityType]; !ok {
+			s.EntityStorage[entityType] = make(map[int]types.StorageEntity)
+		}
+		if maxID > s.EntityIDMax[entityType] {
+			s.EntityIDMax[entityType] = maxID
+		}
+	}
+	for _, entity := range snapshot.Entities {
+		entityType := entity.Type
+		if _, ok := s.EntityStorage[entityType]; !ok {
+			s.EntityStorage[entityType] = make(map[int]types.StorageEntity)
+		}
+		stored := s.deepCopyEntity(entity)
+		s.EntityStorage[entityType][stored.ID] = stored
+		if stored.ID > s.EntityIDMax[entityType] {
+			s.EntityIDMax[entityType] = stored.ID
+		}
+	}
+	s.EntityStorageMutex.Unlock()
+
+	s.RelationStorageMutex.Lock()
+	for entityType := range s.EntityTypes {
+		if _, ok := s.RelationStorage[entityType]; !ok {
+			s.RelationStorage[entityType] = make(map[int]map[int]map[int]types.StorageRelation)
+		}
+		if _, ok := s.RelationRStorage[entityType]; !ok {
+			s.RelationRStorage[entityType] = make(map[int]map[int]map[int]bool)
+		}
+	}
+	for _, relation := range snapshot.Relations {
+		srcType := relation.SourceType
+		srcID := relation.SourceID
+		tgtType := relation.TargetType
+		tgtID := relation.TargetID
+
+		if _, ok := s.RelationStorage[srcType]; !ok {
+			s.RelationStorage[srcType] = make(map[int]map[int]map[int]types.StorageRelation)
+		}
+		if _, ok := s.RelationStorage[srcType][srcID]; !ok {
+			s.RelationStorage[srcType][srcID] = make(map[int]map[int]types.StorageRelation)
+		}
+		if _, ok := s.RelationStorage[srcType][srcID][tgtType]; !ok {
+			s.RelationStorage[srcType][srcID][tgtType] = make(map[int]types.StorageRelation)
+		}
+
+		stored := s.deepCopyRelation(relation)
+		s.RelationStorage[srcType][srcID][tgtType][tgtID] = stored
+
+		if _, ok := s.RelationRStorage[tgtType]; !ok {
+			s.RelationRStorage[tgtType] = make(map[int]map[int]map[int]bool)
+		}
+		if _, ok := s.RelationRStorage[tgtType][tgtID]; !ok {
+			s.RelationRStorage[tgtType][tgtID] = make(map[int]map[int]bool)
+		}
+		if _, ok := s.RelationRStorage[tgtType][tgtID][srcType]; !ok {
+			s.RelationRStorage[tgtType][tgtID][srcType] = make(map[int]bool)
+		}
+		s.RelationRStorage[tgtType][tgtID][srcType][srcID] = true
+	}
+	s.RelationStorageMutex.Unlock()
+
+	return nil
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -132,15 +245,13 @@ func (s *Storage) CreateEntityType(name string) (int, error) {
 	// the relation storage
 	// now we unlock the mutex
 	// and return the new id
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:        "EntityType",
-		//	EntityTypes: s.EntityTypes,
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
+	// enqueue after all type maps are initialized and before releasing the Type lock
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:           persistence.EventTypeCreateEntityType,
+		EntityTypeID:   newID,
+		EntityTypeName: name,
+	})
+
 	s.EntityTypeMutex.Unlock()
 	return newID, nil
 }
@@ -182,15 +293,13 @@ func (s *Storage) CreateEntityTypeUnsafe(name string) (int, error) {
 	// the relation storage
 	// now we unlock the mutex
 	// and return the new id
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:        "EntityType",
-		//	EntityTypes: s.EntityTypes,
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
+	// enqueue after all type maps are initialized; Unsafe callers hold EntityTypeMutex
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:           persistence.EventTypeCreateEntityType,
+		EntityTypeID:   newID,
+		EntityTypeName: name,
+	})
+
 	return newID, nil
 }
 
@@ -250,6 +359,12 @@ func (s *Storage) CreateEntity(entity types.StorageEntity) (int, error) {
 	// in the EntityStorage
 	s.EntityStorage[entity.Type][newID] = entity
 
+	// enqueue after the in-memory entity is stored and before releasing the storage lock
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:   persistence.EventTypeCreateEntity,
+		Entity: entity,
+	})
+
 	//printMutexActions("CreateEntity.EntityStorageMutex.Unlock");
 	s.EntityStorageMutex.Unlock()
 
@@ -304,17 +419,6 @@ func (s *Storage) CreateEntityUnsafe(entity types.StorageEntity) (int, error) {
 	// and set the version to 1
 	entity.Version = 1
 
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:   "Entity",
-		//	Method: "Create",
-		//	Entity: entity,
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
-
 	// now we store the entity element
 	// in the EntityStorage
 	s.EntityStorage[entity.Type][newID] = entity
@@ -324,6 +428,12 @@ func (s *Storage) CreateEntityUnsafe(entity types.StorageEntity) (int, error) {
 	// golang things....
 	s.RelationStorage[entity.Type][newID] = make(map[int]map[int]types.StorageRelation)
 	s.RelationRStorage[entity.Type][newID] = make(map[int]map[int]bool)
+
+	// enqueue after the in-memory entity and relation submaps are stored; Unsafe callers hold the storage locks
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:   persistence.EventTypeCreateEntity,
+		Entity: entity,
+	})
 
 	// since we now stored the entity and created all
 	// needed ressources we can unlock
@@ -410,6 +520,12 @@ func (s *Storage) CreateEntityUniqueValue(entity types.StorageEntity) (int, bool
 	// in the EntityStorage
 	s.EntityStorage[entity.Type][newID] = entity
 
+	// enqueue after the in-memory entity is stored and before releasing the storage lock
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:   persistence.EventTypeCreateEntity,
+		Entity: entity,
+	})
+
 	//printMutexActions("CreateEntity.EntityStorageMutex.Unlock");
 	s.EntityStorageMutex.Unlock()
 
@@ -485,28 +601,21 @@ func (s *Storage) CreateEntityUniqueValueUnsafe(entity types.StorageEntity) (int
 	// and set the version to 1
 	entity.Version = 1
 
-	// - - - - - - - - - - - - - - - - -
-	// persistance handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:   "Entity",
-		//	Method: "Create",
-		//	Entity: entity,
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
-
 	// now we store the entity element
 	// in the EntityStorage
 	s.EntityStorage[entity.Type][newID] = entity
-
-	//printMutexActions("CreateEntity.EntityStorageMutex.Unlock");
 
 	// create the mutex for our ressource on
 	// relation. we have to create the sub maps too
 	// golang things....
 	s.RelationStorage[entity.Type][newID] = make(map[int]map[int]types.StorageRelation)
 	s.RelationRStorage[entity.Type][newID] = make(map[int]map[int]bool)
+
+	// enqueue after the in-memory entity and relation submaps are stored; Unsafe callers hold the storage locks
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:   persistence.EventTypeCreateEntity,
+		Entity: entity,
+	})
 
 	// since we now stored the entity and created all
 	// needed ressources we can unlock
@@ -940,19 +1049,16 @@ func (s *Storage) UpdateEntity(entity types.StorageEntity) error {
 		}
 		entity.Version++
 
-		// - - - - - - - - - - - - - - - - -
-		// persistence.go handling
-		if true == persistenceFlag {
-			//persistence.PersistenceChan <- types.PersistencePayload{
-			//	Type:   "Entity",
-			//	Method: "Update",
-			//	Entity: entity,
-			//}
-		}
-		// - - - - - - - - - - - - - - - - -
-		s.EntityStorage[entity.Type][entity.ID] = entity
-		s.EntityStorageMutex.Unlock()
-		return nil
+	s.EntityStorage[entity.Type][entity.ID] = entity
+
+	// enqueue after the in-memory entity is updated and before releasing the storage lock
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:   persistence.EventTypeUpdateEntity,
+		Entity: entity,
+	})
+
+	s.EntityStorageMutex.Unlock()
+	return nil
 	}
 
 	// unlock the storage and return an error in case we get here
@@ -971,17 +1077,14 @@ func (s *Storage) UpdateEntityUnsafe(entity types.StorageEntity) error {
 		}
 		entity.Version++
 
-		// - - - - - - - - - - - - - - - - -
-		// persistence.go handling
-		if true == persistenceFlag {
-			//persistence.PersistenceChan <- types.PersistencePayload{
-			//	Type:   "Entity",
-			//	Method: "Update",
-			//	Entity: entity,
-			//}
-		}
-		// - - - - - - - - - - - - - - - - -
 		s.EntityStorage[entity.Type][entity.ID] = entity
+
+		// enqueue after the in-memory entity is updated; Unsafe callers hold EntityStorageMutex
+		s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+			Type:   persistence.EventTypeUpdateEntity,
+			Entity: entity,
+		})
+
 		return nil
 	}
 
@@ -993,20 +1096,17 @@ func (s *Storage) DeleteEntity(Type int, id int) {
 	// we gonne lock the mutex and
 	// delete the element
 	s.EntityStorageMutex.Lock()
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:   "Entity",
-		//	Method: "Delete",
-		//	Entity: types.StorageEntity{
-		//		ID:   id,
-		//		Type: Type,
-		//	},
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
 	delete(s.EntityStorage[Type], id)
+
+	// enqueue after the in-memory entity is deleted and before releasing the storage lock
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type: persistence.EventTypeDeleteEntity,
+		Entity: types.StorageEntity{
+			ID:   id,
+			Type: Type,
+		},
+	})
+
 	s.EntityStorageMutex.Unlock()
 	// now we delete the relations from and to this entity
 	// first child
@@ -1018,20 +1118,17 @@ func (s *Storage) DeleteEntity(Type int, id int) {
 func (s *Storage) DeleteEntityUnsafe(Type int, id int) {
 	// we gonne lock the mutex and
 	// delete the element
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:   "Entity",
-		//	Method: "Delete",
-		//	Entity: types.StorageEntity{
-		//		ID:   id,
-		//		Type: Type,
-		//	},
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
 	delete(s.EntityStorage[Type], id)
+
+	// enqueue after the in-memory entity is deleted; Unsafe callers hold EntityStorageMutex
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type: persistence.EventTypeDeleteEntity,
+		Entity: types.StorageEntity{
+			ID:   id,
+			Type: Type,
+		},
+	})
+
 	// now we delete the relations from and to this entity
 	// first child
 	s.DeleteChildRelationsUnsafe(Type, id)
@@ -1126,44 +1223,36 @@ func (s *Storage) DeleteRelationListUnsafe(relationList map[int]types.StorageRel
 
 func (s *Storage) DeleteRelation(sourceType int, sourceID int, targetType int, targetID int) {
 	s.RelationStorageMutex.Lock()
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:   "Relation",
-		//	Method: "Delete",
-		//	Relation: types.StorageRelation{
-		//		SourceID:   sourceID,
-		//		SourceType: sourceType,
-		//		TargetID:   targetID,
-		//		TargetType: targetType,
-		//	},
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
 	delete(s.RelationStorage[sourceType][sourceID][targetType], targetID)
 	delete(s.RelationRStorage[targetType][targetID][sourceType], sourceID)
+
+	// enqueue after both forward and reverse indexes are removed; Safe holds RelationStorageMutex, Unsafe callers hold it
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type: persistence.EventTypeDeleteRelation,
+		Relation: types.StorageRelation{
+			SourceID:   sourceID,
+			SourceType: sourceType,
+			TargetID:   targetID,
+			TargetType: targetType,
+		},
+	})
 	s.RelationStorageMutex.Unlock()
 }
 
 func (s *Storage) DeleteRelationUnsafe(sourceType int, sourceID int, targetType int, targetID int) {
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:   "Relation",
-		//	Method: "Delete",
-		//	Relation: types.StorageRelation{
-		//		SourceID:   sourceID,
-		//		SourceType: sourceType,
-		//		TargetID:   targetID,
-		//		TargetType: targetType,
-		//	},
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
 	delete(s.RelationStorage[sourceType][sourceID][targetType], targetID)
 	delete(s.RelationRStorage[targetType][targetID][sourceType], sourceID)
+
+	// enqueue after both forward and reverse indexes are removed; Safe holds RelationStorageMutex, Unsafe callers hold it
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type: persistence.EventTypeDeleteRelation,
+		Relation: types.StorageRelation{
+			SourceID:   sourceID,
+			SourceType: sourceType,
+			TargetID:   targetID,
+			TargetType: targetType,
+		},
+	})
 }
 
 func (s *Storage) DeleteChildRelations(Type int, id int) error {
@@ -1241,25 +1330,27 @@ func (s *Storage) CreateRelation(srcType int, srcID int, targetType int, targetI
 	if _, ok := s.RelationRStorage[targetType][targetID][srcType]; !ok {
 		s.RelationRStorage[targetType][targetID][srcType] = make(map[int]bool)
 	}
+	// preserve the relation identity tuple used by persistence adapters
+	relation.SourceType = srcType
+	relation.SourceID = srcID
+	relation.TargetType = targetType
+	relation.TargetID = targetID
+
 	// set version to 1
 	relation.Version = 1
 	// now we store the relation
 	s.RelationStorage[srcType][srcID][targetType][targetID] = relation
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:     "Relation",
-		//	Method:   "Create",
-		//	Relation: relation,
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
 	// and an entry into the reverse index, its existence
 	// allows us to use the coords in the normal index to revtrieve
 	// the Relation. We dont create a pointer because golang doesnt
 	// allow pointer on submaps in nested maps
 	s.RelationRStorage[targetType][targetID][srcType][srcID] = true
+
+	// enqueue after both forward and reverse indexes are updated; Safe holds RelationStorageMutex, Unsafe callers hold it
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:     persistence.EventTypeCreateRelation,
+		Relation: relation,
+	})
 	// we are done now we can unlock the entity Types
 	//// - - - - - - - - - - - - - - - -
 	//and finally unlock the relation Type and return
@@ -1302,25 +1393,27 @@ func (s *Storage) CreateRelationUnsafe(srcType int, srcID int, targetType int, t
 	if _, ok := s.RelationRStorage[targetType][targetID][srcType]; !ok {
 		s.RelationRStorage[targetType][targetID][srcType] = make(map[int]bool)
 	}
+	// preserve the relation identity tuple used by persistence adapters
+	relation.SourceType = srcType
+	relation.SourceID = srcID
+	relation.TargetType = targetType
+	relation.TargetID = targetID
+
 	// set version to 1
 	relation.Version = 1
 	// now we store the relation
 	s.RelationStorage[srcType][srcID][targetType][targetID] = relation
-	// - - - - - - - - - - - - - - - - -
-	// persistence.go handling
-	if true == persistenceFlag {
-		//persistence.PersistenceChan <- types.PersistencePayload{
-		//	Type:     "Relation",
-		//	Method:   "Create",
-		//	Relation: relation,
-		//}
-	}
-	// - - - - - - - - - - - - - - - - -
 	// and an entry into the reverse index, its existence
 	// allows us to use the coords in the normal index to revtrieve
 	// the Relation. We dont create a pointer because golang doesnt
 	// allow pointer on submaps in nested maps
 	s.RelationRStorage[targetType][targetID][srcType][srcID] = true
+
+	// enqueue after both forward and reverse indexes are updated; Safe holds RelationStorageMutex, Unsafe callers hold it
+	s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+		Type:     persistence.EventTypeCreateRelation,
+		Relation: relation,
+	})
 	// we are done now we can unlock the entity Types
 	//// - - - - - - - - - - - - - - - -
 	//and finally unlock the relation Type and return
@@ -1342,21 +1435,16 @@ func (s *Storage) UpdateRelation(srcType int, srcID int, targetType int, targetI
 					}
 					rel.Version++
 
-					// - - - - - - - - - - - - - - - - -
-					// persistence.go handling
-					if true == persistenceFlag {
-						//persistence.PersistenceChan <- types.PersistencePayload{
-						//	Type:     "Relation",
-						//	Method:   "Create",
-						//	Relation: rel,
-						//}
-					}
-
-					// - - - - - - - - - - - - - - - - -
 					// update the data itself
 					rel.Context = relation.Context
 					rel.Properties = relation.Properties
 					s.RelationStorage[srcType][srcID][targetType][targetID] = rel
+
+					// enqueue after the in-memory relation is updated; Safe holds RelationStorageMutex, Unsafe callers hold it
+					s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+						Type:     persistence.EventTypeUpdateRelation,
+						Relation: rel,
+					})
 					s.RelationStorageMutex.Unlock()
 					return relation, nil
 				}
@@ -1379,21 +1467,16 @@ func (s *Storage) UpdateRelationUnsafe(srcType int, srcID int, targetType int, t
 					}
 					rel.Version++
 
-					// - - - - - - - - - - - - - - - - -
-					// persistence.go handling
-					if true == persistenceFlag {
-						//persistence.PersistenceChan <- types.PersistencePayload{
-						//	Type:     "Relation",
-						//	Method:   "Create",
-						//	Relation: rel,
-						//}
-					}
-
-					// - - - - - - - - - - - - - - - - -
 					// update the data itself
 					rel.Context = relation.Context
 					rel.Properties = relation.Properties
 					s.RelationStorage[srcType][srcID][targetType][targetID] = rel
+
+					// enqueue after the in-memory relation is updated; Safe holds RelationStorageMutex, Unsafe callers hold it
+					s.enqueuePersistenceEvent(&persistence.PersistenceEvent{
+						Type:     persistence.EventTypeUpdateRelation,
+						Relation: rel,
+					})
 					return relation, nil
 				}
 			}
